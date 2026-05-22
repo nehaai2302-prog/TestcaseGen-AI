@@ -1,0 +1,5 @@
+bug_number,title,description,severity,component,resolution
+BUG-001,Login fails with SSO token expired,Users redirected to error page when SSO token expires instead of refresh flow,high,auth,open
+BUG-002,Checkout double charge,Two identical charges appear when user double-clicks Pay,high,payments,resolved
+BUG-003,Profile image upload 5MB,No validation message when image exceeds 5MB,medium,profile,open
+BUG-004,Search returns stale results,Results cached after product rename until hard refresh,low,search,open

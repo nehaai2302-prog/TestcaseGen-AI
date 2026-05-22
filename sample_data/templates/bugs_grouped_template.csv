@@ -1,0 +1,6 @@
+Bug_ID,Title,Steps_to_Reproduce,Expected_Result,Actual_Result,Severity,Component,Resolution
+BUG-101,Login fails with expired SSO,Open the login page,Login form is shown,,high,auth,open
+BUG-101,,Select SSO provider,Provider redirect starts,,
+BUG-101,,Wait for token expiry and retry,User is refreshed or re-prompted,User sees generic error page,
+BUG-102,Checkout double charge,Add item to cart,Cart shows one item,,high,payments,resolved
+BUG-102,,Click Pay twice rapidly,Only one charge is created,Two charges appear,,

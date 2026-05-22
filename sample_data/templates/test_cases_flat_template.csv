@@ -1,0 +1,3 @@
+test_case_id,title,steps,expected_result,test_type,priority,description,module
+TC-001,Login with valid user,"Open login page; Enter valid email and password; Click Sign in",User lands on dashboard,positive,high,Covers basic auth,auth
+TC-002,Login with wrong password,"Open login page; Enter valid email and wrong password; Click Sign in",Inline error shown and user stays on login,negative,high,,auth

@@ -1,0 +1,3 @@
+bug_number,title,description,steps_to_reproduce,expected_result,actual_result,severity,component,resolution
+BUG-001,Login fails with SSO token expired,Users redirected to error page when SSO token expires.,Open login; Select SSO; Wait for token expiry,User is refreshed or re-prompted,Generic error page shown,high,auth,open
+BUG-002,Checkout double charge,Two identical charges when Pay is double-clicked.,Add item to cart; Click Pay twice rapidly,Only one charge is created,Two charges appear,high,payments,resolved

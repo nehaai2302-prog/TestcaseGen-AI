@@ -1,0 +1,6 @@
+TestCaseID,title,step,expected_result,test_type,priority,module
+TC-001,Login with valid user,Open login page,Login form visible,positive,high,auth
+TC-001,,Enter valid email and password,Fields accept input,,
+TC-001,,Click Sign in,User lands on dashboard,,
+TC-002,Login with wrong password,Open login page,,negative,high,auth
+TC-002,,Enter wrong password and submit,Inline error shown; user stays on login,,

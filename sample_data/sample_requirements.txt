@@ -1,0 +1,13 @@
+# Sample requirements — TestCraft AI demo
+
+## Authentication
+Users authenticate with email and password. Sessions expire after 30 minutes of inactivity. SSO users must refresh tokens silently; if refresh fails, show a friendly error and offer re-login.
+
+## Payments
+Checkout supports credit cards via Stripe. Double-submission must be prevented: the Pay button disables after first click until a response returns. Failed payments show the gateway message and allow retry without duplicating cart items.
+
+## Profile
+Users may upload a profile image up to 5MB. Supported formats: JPEG and PNG. Images are resized server-side to 512px max dimension.
+
+## Search
+Product search uses a catalog index updated within 5 minutes of admin edits. If the index is stale, show a subtle banner indicating results may be incomplete.

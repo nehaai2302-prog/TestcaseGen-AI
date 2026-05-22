@@ -1,0 +1,15 @@
+.env
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.streamlit/secrets.toml
+*.xlsx
+.DS_Store
+
+# Streamlit secrets file (keep it out of version control)
+.streamlit/secrets.toml
+
+# Scratch files
+_scratch_verify.py

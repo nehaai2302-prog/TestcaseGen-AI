@@ -1,0 +1,7 @@
+{
+  "python.defaultInterpreterPath": "${env:USERPROFILE}/anaconda3/envs/test_project4/python.exe",
+  "python.condaPath": "${env:USERPROFILE}/anaconda3/Scripts/conda.exe",
+  "python.analysis.diagnosticMode": "workspace",
+  "python-envs.defaultPackageManager": "ms-python.python:conda",
+  "python-envs.defaultEnvManager": "ms-python.python:conda"
+}

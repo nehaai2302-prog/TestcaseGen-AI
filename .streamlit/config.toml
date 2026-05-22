@@ -1,0 +1,10 @@
+[theme]
+base = "dark"
+primaryColor = "#7C5CFF"
+backgroundColor = "#0F1226"
+secondaryBackgroundColor = "#1A1F3D"
+textColor = "#F2F3FB"
+font = "sans serif"
+
+# Omit headless (default false) so `streamlit run` opens your browser locally.
+# Set headless = true only if you deploy without a GUI or prefer manual URLs.
