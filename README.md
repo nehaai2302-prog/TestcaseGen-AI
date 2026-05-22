@@ -1,6 +1,6 @@
 # TestCraft AI
 
-Capstone project: AI-powered **manual test case generation** from requirement documents, grounded in **project history** (existing test cases and bug reports) using **RAG** on **Supabase pgvector**, orchestrated with **LangChain** and **LangGraph** (bounded conditional retrieval loop-back). **Streamlit** provides an all-Python UI with semantic library search, traceability matrix, and CSV/XLSX export.
+Capstone project: AI-powered **manual test case generation** from requirement documents, grounded in **project history** (existing test cases and bug reports) using **RAG** on **Supabase pgvector**, orchestrated with **LangChain** and **LangGraph** (bounded conditional retrieval loop-back). **Streamlit** provides an all-Python UI with semantic library search, a requirements **traceability matrix**, and CSV/XLSX export. Optional **[LangSmith](https://smith.langchain.com)** tracing logs each pipeline run for debugging and evaluation.
 
 ## Architecture
 
@@ -149,17 +149,46 @@ Copy [`.env.example`](.env.example) to `.env` and fill in values. **Never commit
 | `RETRIEVAL_TOP_K_PER_RULE` | no | Default `4` |
 | `RETRIEVAL_MATCH_THRESHOLD` | no | Default `0.15` |
 | `DEDUP_SIMILARITY_THRESHOLD` | no | Default `0.88` |
+| `LIBRARY_SEARCH_THRESHOLD` | no | Library semantic search threshold (default `0.25`) |
+| `LIBRARY_SEARCH_MATCH_COUNT` | no | Library search result cap (default `25`) |
+| `LANGCHAIN_TRACING_V2` | no | Set `true` to send LangGraph/LangChain traces to LangSmith |
+| `LANGCHAIN_ENDPOINT` | no | Default `https://api.smith.langchain.com` |
+| `LANGCHAIN_API_KEY` | no | LangSmith API key (when tracing enabled) |
+| `LANGCHAIN_PROJECT` | no | LangSmith project name for grouping runs |
 
 See `.env.example` for the full list and comments.
+
+## LangSmith (optional — LLM run tracing)
+
+This is **not** the same as the in-app **Traceability Matrix** (`pages/Traceability.py`), which maps **requirements → test cases** for QA. **LangSmith** records **LangGraph / LangChain** execution traces (spans, prompts, tool calls, latency, errors) while you run the generation pipeline.
+
+LangSmith is pulled in automatically via LangChain; no extra app code is required — enable it with environment variables in `.env`:
+
+```env
+LANGCHAIN_TRACING_V2=true
+LANGCHAIN_ENDPOINT=https://api.smith.langchain.com
+LANGCHAIN_API_KEY=lsv2_pt_...          # from https://smith.langchain.com → Settings → API keys
+LANGCHAIN_PROJECT=TestGeneration-AI    # any label you choose in the LangSmith UI
+```
+
+The SDK also accepts `LANGSMITH_*` prefixes (e.g. `LANGSMITH_TRACING`, `LANGSMITH_API_KEY`) instead of `LANGCHAIN_*`.
+
+**Setup:**
+
+1. Sign up at [smith.langchain.com](https://smith.langchain.com) and create a project.
+2. Copy the variables above into `.env` (see commented block in `.env.example`).
+3. Run **Generate → Run generation pipeline**; open your project in LangSmith to inspect each graph step and LLM call.
+
+Leave tracing unset or `LANGCHAIN_TRACING_V2=false` if you do not need observability. **Never commit** real LangSmith keys — only placeholders in `.env.example`.
 
 ## Usage flow
 
 1. **Home:** open the app; use the sidebar to navigate.
 2. **Settings:** create a project (sets active `project_id` in session).
 3. **Import:** upload `sample_data/sample_bug_reports.csv` and `sample_data/sample_test_cases.csv` (or your own — see Import page help).
-4. **Generate:** upload a requirement file (PDF/DOCX/TXT), **Ingest document**, then **Run generation pipeline**.
+4. **Generate:** upload a requirement file (PDF/DOCX/TXT), **Ingest document**, then **Run generation pipeline**. (With [LangSmith](#langsmith-optional--llm-run-tracing) enabled, inspect the same run in the LangSmith UI.)
 5. **Library:** semantic search, filters, export CSV or Excel.
-6. **Traceability matrix:** requirements → linked test cases (optional module filter).
+6. **Traceability matrix:** requirements → linked test cases (optional module filter). This is **QA traceability**, separate from LangSmith **LLM tracing**.
 7. **Bug reports** / **Dashboard:** browse imported bugs and project metrics.
 
 Sample requirement text: [`sample_data/sample_requirements.txt`](sample_data/sample_requirements.txt).
@@ -172,7 +201,7 @@ Sample requirement text: [`sample_data/sample_requirements.txt`](sample_data/sam
 
 | Path | Reason |
 |------|--------|
-| `.env` | API keys and Supabase service role |
+| `.env` | API keys, Supabase service role, LangSmith keys |
 | `.streamlit/secrets.toml` | Streamlit Cloud secrets |
 | `.venv/`, `venv/` | Local environment (recreate with `uv sync`) |
 | `__pycache__/`, `*.pyc` | Python cache |
