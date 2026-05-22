@@ -1,6 +1,32 @@
 # TestCraft AI
 
-Capstone project: AI-powered **manual test case generation** from requirement documents, grounded in **project history** (existing test cases and bug reports) using **RAG** on **Supabase pgvector**, orchestrated with **LangChain** and **LangGraph** (bounded conditional retrieval loop-back). **Streamlit** provides an all-Python UI with semantic library search, a requirements **traceability matrix**, and CSV/XLSX export. Optional **[LangSmith](https://smith.langchain.com)** tracing logs each pipeline run for debugging and evaluation.
+## Problem & goal
+
+QA teams spend significant time turning requirement documents into manual test cases while keeping traceability to source specs and awareness of past defects. Requirements, bug history, and existing tests often live in separate tools, so new coverage can miss regressions that already appeared on the same screen, service, or functional area.
+
+**TestCraft AI** addresses that gap: upload a requirement document, optionally import project bugs and test cases, and run a **multi-agent pipeline** that produces structured, review-ready manual tests linked to requirement IDs. Retrieval-augmented generation (RAG) over **Supabase pgvector** surfaces relevant history before each requirement is written up, so generated cases can reflect real regression risk—not generic templates.
+
+**How it works (summary):** documents are chunked and embedded at prepare time; **LangGraph** runs an Analyst step, scope-aware per-rule retrieval, parallel test generation, optional coverage review, deduplication, and persistence. **Streamlit** provides ingest, generation, semantic library search, a traceability matrix, and CSV/XLSX export. Optional **[LangSmith](https://smith.langchain.com)** tracing records each pipeline run for debugging and evaluation.
+
+**Capstone alignment:** primarily **Case 2** (AI agent for task automation), with **Case 1** (RAG-grounded generation) and **Case 3** (document ingest + semantic search) as supporting pillars. Vector storage uses **pgvector** on Supabase (same RAG pattern as ChromaDB-style stores, on Postgres).
+
+## Project framing (SCR & SMART)
+
+**SCR (Situation → Complication → Resolution)**
+
+| | |
+|---|---|
+| **Situation** | QA maintains requirements, historical bugs, and test libraries; manual test design is repetitive and must stay traceable to specs. |
+| **Complication** | Writing cases from prose is slow; new features may not reuse lessons from prior bugs on the same checkout flow, API, or audit area. |
+| **Resolution** | TestCraft AI ingests requirements, retrieves scope-aware project history via RAG, and runs a bounded LangGraph workflow to generate linked test cases with coverage checks, dedup, and export. |
+
+**SMART objectives (demo scope)**
+
+- **Specific:** Generate manual test cases (positive / negative / boundary / edge by level) from requirement docs with `linked_requirement` and chunk UUID traceability.
+- **Measurable:** Exhaustiveness quotas per rule (e.g. Smoke = 1 positive + 1 negative per requirement); traceability matrix counts cases per requirement ID.
+- **Achievable:** End-to-end demo in ~5 minutes using `sample_data/` — see [Verification](#evaluation) and [`docs/VERIFICATION.md`](docs/VERIFICATION.md).
+- **Relevant:** Supports real QA workflows: import history, generate from specs, search library, export to spreadsheets.
+- **Time-bound:** Single prepare + generate run completes in minutes for sample docs (exact time depends on model and rule count).
 
 ## Architecture
 
@@ -186,7 +212,9 @@ Leave tracing unset or `LANGCHAIN_TRACING_V2=false` if you do not need observabi
 1. **Home:** open the app; use the sidebar to navigate.
 2. **Settings:** create a project (sets active `project_id` in session).
 3. **Import:** upload `sample_data/sample_bug_reports.csv` and `sample_data/sample_test_cases.csv` (or your own — see Import page help).
-4. **Generate:** upload a requirement file (PDF/DOCX/TXT), **Ingest document**, then **Run generation pipeline**. (With [LangSmith](#langsmith-optional--llm-run-tracing) enabled, inspect the same run in the LangSmith UI.)
+4. **Generate:** upload a requirement file (PDF/DOCX/TXT), **Prepare requirements**, then **Generate test cases**. (With [LangSmith](#langsmith-optional--llm-run-tracing) enabled, inspect the same run in the LangSmith UI.)
+
+**Requirement ID parsing:** Supports `FR-2.4:` on one line and `FR-2.4` on its own line with text below. If layout looks ambiguous (e.g. duplicate `FR-2-2` suffixes), Step 2 runs the Analyst LLM once (~20–45s) to repair IDs. Clean docs skip that extra call.
 5. **Library:** semantic search, filters, export CSV or Excel.
 6. **Traceability matrix:** requirements → linked test cases (optional module filter). This is **QA traceability**, separate from LangSmith **LLM tracing**.
 7. **Bug reports** / **Dashboard:** browse imported bugs and project metrics.
@@ -226,7 +254,7 @@ Commit that file only if the host requires it, or generate it in CI and keep it 
 
 ## Evaluation
 
-See [`docs/VERIFICATION.md`](docs/VERIFICATION.md) for a lightweight gold-style checklist and loop-back scenario (no RAGAS dependency required).
+See [`docs/VERIFICATION.md`](docs/VERIFICATION.md) for a lightweight gold-style checklist, scope-aware RAG demo script, and E2E steps (no RAGAS dependency required). Use it for self-review and the capstone demo video.
 
 ## Demo video
 
@@ -254,9 +282,20 @@ Record a ~5 minute walkthrough: create project → import CSVs → ingest requir
 | `pyproject.toml` / `uv.lock` | Dependencies and lockfile |
 | `.env.example` | Environment variable template (safe to commit) |
 
+## Ethics & data handling
+
+- **Human review:** Generated tests are drafts for QA review—not autonomous pass/fail verdicts on production systems.
+- **Third-party APIs:** Requirement text and retrieved context are sent to **OpenAI** for embeddings and generation; use only data you are allowed to process under your organisation’s policy.
+- **Storage:** Project data (requirements, bugs, test cases) is stored in **your** Supabase project, scoped by `project_id`. Do not commit `.env` or API keys; use `.env.example` as a template.
+- **Credentials:** The Supabase **service role** key is used server-side by Streamlit only and must never be exposed to browsers or committed to Git.
+- **Demo data:** `sample_data/` is synthetic/educational—avoid uploading real customer PII or production secrets for capstone demos.
+- **Bias & gaps:** LLMs may under-cover edge cases or over-fit to retrieved history; exhaustiveness levels and coverage review reduce but do not eliminate that risk—validators remain responsible for sign-off.
+- **Hallucination risk:** Titles, steps, and expected results should be checked against the source requirement and product behaviour before use in a test management system.
+
 ## Limitations (v1)
 
 - Service role key must never be exposed to browsers; this app is server-side Streamlit only.
+- Analyst-derived atomic requirements (e.g. `REQ-01-1`, `REQ-01-2`) are not stored as separate rows in `requirements`; traceability is via `test_cases.linked_requirement` and chunk UUIDs (persisted atomic-rules table is a future enhancement).
 - Reranking and full LangGraph checkpoint HITL are documented as future enhancements.
 - Very large PDFs rely on chunking; generation is bounded by model context — use focused documents for demos.
 

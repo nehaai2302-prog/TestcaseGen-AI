@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 import pandas as pd
 
-from services.chunking import split_requirements
+from services.chunking import ParseQuality, assess_parse_quality, split_requirements
 from services.document_parser import parse_uploaded_file
 from services.embeddings import embed_texts, get_embeddings_model
 from services.supabase_repo import SupabaseRepo, content_hash
@@ -52,12 +52,13 @@ def ingest_requirement_document(
     filename: str,
     file_bytes: bytes,
     module: str | None = None,
-) -> list[dict[str, Any]]:
-    """Parse, split, embed, replace requirements for this document, return inserted rows."""
+) -> tuple[list[dict[str, Any]], ParseQuality]:
+    """Parse, split, embed, replace requirements; return rows and parse quality."""
     text = parse_uploaded_file(filename, file_bytes)
     requirements = split_requirements(text)
     if not requirements:
         raise ValueError("No text extracted from document")
+    parse_quality = assess_parse_quality(requirements)
 
     repo.delete_requirements_for_document(project_id, filename)
     emb = get_embeddings_model()
@@ -79,7 +80,7 @@ def ingest_requirement_document(
             }
         )
     inserted = repo.insert_requirement_chunks(project_id, filename, rows)
-    return inserted
+    return inserted, parse_quality
 
 
 def _normalize_header(name: str) -> str:

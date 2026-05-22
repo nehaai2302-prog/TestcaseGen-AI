@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import re
+from collections import Counter
 from dataclasses import dataclass
+from typing import Literal
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+ParseQuality = Literal["ok", "ambiguous", "synthetic", "empty"]
 
 
 @dataclass(frozen=True)
@@ -15,65 +19,56 @@ class RequirementSplit:
     is_synthetic: bool = False
 
 
-# Prefix-style requirement IDs (FR-1.1:, US-103:, REQ-12., - **FR-2.2**:).
-# Anchored to line start (with optional bullet/bold markers) and requires a `:`
-# or `.` separator. Case-sensitive on purpose: lowercase English words like
-# "of", "in", "as" must NOT match.
+# Prefix IDs: FR-2.4:, FR-3.1 (Cart Interaction):, NFR-4.1 (Data Protection):, etc.
 _PREFIX_REQUIREMENT_RE = re.compile(
     r"""
-    (?m)                              # multiline so ^ means start of a line
-    ^[ \t]*                           # optional leading indent
-    (?:[-*\u2022]\s+)?                # optional bullet (-, *, or U+2022)
-    \**                               # optional opening **bold**
-    (?P<prefix>[A-Z]{2,10})           # UPPERCASE prefix only
-    [ \t_-]{0,3}                      # short separator, never crosses newlines
-    (?P<num>\d+(?:\.\d+)*)            # 1, 1.1, 2.3.4 ...
-    \**                               # optional closing **bold**
-    \s*[:.]                           # MUST be followed by : or .
+    (?m)
+    ^[ \t]*
+    ((?:[-*\u2022]\s+)|)
+    \**
+    (?P<prefix>[A-Z]{2,10})
+    [ \t_-]{0,3}
+    (?P<num>\d+(?:\.\d+)*)
+    \**
+    (?:
+        \s*(?:\([^)]*\))?
+        \s*:
+      | \.(?!\d)
+      | (?=\s*$)
+    )
     """,
     re.VERBOSE,
 )
 
-# Numeric-only requirement IDs (1.2.3:, 4.1:). Need a colon to avoid matching
-# normal section headings like "2.1 Coupon Input and Submission" or "1. Intro".
 _NUMERIC_HEADING_RE = re.compile(
     r"""
     (?m)
     ^[ \t]*
     (?:[-*\u2022]\s+)?
-    (?P<num>\d+(?:\.\d+){1,})         # at least two dotted parts (1.2 minimum)
-    \s*:                              # REQUIRE colon; period is too ambiguous
+    (?P<num>\d+(?:\.\d+){1,})
+    \s*:
     """,
     re.VERBOSE,
 )
 
-# Trailing section-heading detector. Matches lines like "2.1 Coupon Input",
-# "2. Functional Requirements (FR)" or "1. Introduction" - a leading section
-# number followed by title text that does NOT end in sentence punctuation. We
-# use the "no terminal . ! ? :" tail to avoid mistaking numbered list items
-# ("1. Click Save.") for headings.
 _SECTION_HEADING_TRAILER_RE = re.compile(
     r"""
     ^\s*
-    \d+(?:\.\d+)*                     # leading section number
-    \.?                               # optional dot after the number
-    \s+                               # whitespace before the title
-    \S.*?                             # title text
-    [^.!?:\s]                         # title ends with non-punctuation
+    \d+(?:\.\d+)*
+    \.?
+    \s+
+    \S.*?
+    [^.!?:\s]
     \s*$
     """,
     re.VERBOSE,
 )
 
+_DEDUP_ID_SUFFIX_RE = re.compile(r"^[A-Z]{2,10}-\d+-\d+$")
+_SHORT_PREFIX_ID_RE = re.compile(r"^[A-Z]{2,10}-\d+$")
+
 
 def _strip_trailing_section_headings(block: str) -> str:
-    """Remove trailing section-heading lines (and blank lines) from a body block.
-
-    Requirements come from a single match anchored at the requirement ID. Any
-    section heading that sits between this requirement and the next one is
-    sliced into this requirement's tail by the split loop. Strip those so the
-    requirement body only contains its own content.
-    """
     lines = block.rstrip().split("\n")
     while lines:
         last = lines[-1].rstrip()
@@ -81,8 +76,6 @@ def _strip_trailing_section_headings(block: str) -> str:
             lines.pop()
             continue
         if ":" in last:
-            # A line with a colon is content (or a requirement we already
-            # matched). Never strip.
             break
         if _SECTION_HEADING_TRAILER_RE.match(last):
             lines.pop()
@@ -98,13 +91,6 @@ def _normalize_requirement_id(raw: str) -> str:
 
 
 def _requirement_id_from_match(match: re.Match[str]) -> str:
-    """Build a clean requirement ID from named groups.
-
-    Using match.group(0) here would re-include the leading bullet (`-`, `*`,
-    `\u2022`), any opening `**` bold markers, surrounding whitespace and the
-    trailing `:`/`.` punctuation in the ID. We always reconstruct from the
-    `prefix` and `num` groups so the ID is canonical (e.g. FR-1.1).
-    """
     groups = match.groupdict()
     prefix = (groups.get("prefix") or "").upper()
     num = groups.get("num") or ""
@@ -118,7 +104,6 @@ def _iter_requirement_matches(text: str) -> list[re.Match[str]]:
     matches.extend(_NUMERIC_HEADING_RE.finditer(text))
     matches.sort(key=lambda m: m.start())
 
-    # Drop overlaps, preferring the match that appears first in the sorted order.
     unique: list[re.Match[str]] = []
     last_end = -1
     for match in matches:
@@ -127,6 +112,41 @@ def _iter_requirement_matches(text: str) -> list[re.Match[str]]:
         unique.append(match)
         last_end = match.end()
     return unique
+
+
+def structured_splits_low_confidence(splits: list[RequirementSplit]) -> bool:
+    """True when regex splits look unreliable; Analyst LLM should re-parse."""
+    if not splits or all(s.is_synthetic for s in splits):
+        return False
+
+    ids = [s.requirement_id for s in splits if s.requirement_id]
+    if not ids:
+        return True
+
+    if sum(1 for rid in ids if _DEDUP_ID_SUFFIX_RE.match(rid or "")) >= 2:
+        return True
+
+    for split in splits:
+        rid = split.requirement_id or ""
+        if _SHORT_PREFIX_ID_RE.match(rid):
+            first_line = (split.text or "").splitlines()[0].strip()
+            if re.match(r"^\d+\b", first_line):
+                return True
+
+    if any(n >= 3 for n in Counter(ids).values()):
+        return True
+
+    return False
+
+
+def assess_parse_quality(splits: list[RequirementSplit]) -> ParseQuality:
+    if not splits:
+        return "empty"
+    if all(s.is_synthetic for s in splits):
+        return "synthetic"
+    if structured_splits_low_confidence(splits):
+        return "ambiguous"
+    return "ok"
 
 
 def split_text(
@@ -139,17 +159,11 @@ def split_text(
         chunk_overlap=chunk_overlap,
         separators=["\n\n", "\n", ". ", " ", ""],
     )
-    chunks = splitter.split_text(text)
-    return [c.strip() for c in chunks if c.strip()]
+    return [c.strip() for c in splitter.split_text(text) if c.strip()]
 
 
 def split_requirements(text: str) -> list[RequirementSplit]:
-    """Split structured docs into one row per requirement ID.
-
-    Supports IDs like FR-2.2, FR 2.2, US-103, REQ-12, custom prefixes, and numeric
-    headings such as 1.2.3. If no IDs are found, falls back to character
-    chunks with synthetic REQ-01, REQ-02, ... IDs.
-    """
+    """Split structured docs into one row per requirement ID."""
     cleaned = text.strip()
     if not cleaned:
         return []
@@ -168,8 +182,6 @@ def split_requirements(text: str) -> list[RequirementSplit]:
     splits: list[RequirementSplit] = []
     seen: dict[str, int] = {}
     for idx, match in enumerate(matches):
-        # Body starts AFTER the matched ID prefix (and its trailing :/.) so the
-        # bullet + ID + colon don't get duplicated into the requirement text.
         body_start = match.end()
         end = matches[idx + 1].start() if idx + 1 < len(matches) else len(cleaned)
         body = cleaned[body_start:end].strip()

@@ -5,7 +5,10 @@ from __future__ import annotations
 from dotenv import load_dotenv
 import streamlit as st
 
+from services.session_project import restore_project_from_session
+
 load_dotenv()
+restore_project_from_session()
 
 st.set_page_config(
     page_title="TestCraft AI",

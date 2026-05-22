@@ -24,7 +24,9 @@ from agent.state import TestGenState
 from services.bootstrap import get_repo
 from services.export import test_cases_to_dataframe, to_csv_bytes, to_excel_bytes
 from services.ingest import ingest_requirement_document
-from theme import apply_theme, render_back_to_home_link
+from services.project_ui import active_project_name
+from services.session_project import clear_generate_workflow
+from theme import apply_theme, render_active_project_banner, render_back_to_home_link
 
 apply_theme()
 render_back_to_home_link()
@@ -39,15 +41,45 @@ except Exception as e:
 
 pid = st.session_state.get("project_id")
 if not pid:
-    st.warning("Select or create a project from the home page or Settings first.")
+    st.warning(
+        "Select or create a project on **Home** or **Settings** first. "
+        "Your last project is restored automatically after a browser refresh when the URL includes it."
+    )
     st.stop()
+
+_projects = repo.list_projects()
+render_active_project_banner(active_project_name(_projects, pid))
+
+
+def _resolve_req_chunks() -> list[dict]:
+    """Session chunks first; if missing, reload from Supabase for the prepared document."""
+    chunks = st.session_state.get("req_chunks") or []
+    if chunks:
+        return chunks
+    doc = st.session_state.get("req_doc_name")
+    if not doc:
+        return []
+    try:
+        fresh = repo.list_requirements_for_document(pid, doc)
+        if fresh:
+            st.session_state["req_chunks"] = fresh
+            return fresh
+    except Exception:
+        pass
+    return []
+
 
 st.markdown(
     "Import **bug reports** and **test cases** on the Import page first so generation can "
     "retrieve similar project history (RAG) and link new tests to that history."
 )
 
-uploaded = st.file_uploader("Requirement document", type=["pdf", "docx", "txt", "md"])
+_upload_nonce = int(st.session_state.get("generate_upload_nonce") or 0)
+uploaded = st.file_uploader(
+    "Requirement document",
+    type=["pdf", "docx", "txt", "md"],
+    key=f"generate_req_upload_{_upload_nonce}",
+)
 
 _level_opts = level_options()
 _level_values = [v for _, v in _level_opts]
@@ -64,21 +96,51 @@ st.caption(profile["description"])
 
 module_hint = st.text_input("Optional module hint", placeholder="e.g. payments")
 
-chunk_count = len(st.session_state.get("req_chunks") or [])
-if chunk_count:
+_req_chunks = _resolve_req_chunks()
+chunk_count = len(_req_chunks)
+_has_run = bool(st.session_state.get("last_run"))
+if chunk_count and not _has_run:
     est_requirements = chunk_count
     est_cases = estimate_total_cases(exhaustiveness, est_requirements)
+    _prepared_ids = [
+        r.get("requirement_id") for r in _req_chunks if r.get("requirement_id")
+    ]
+    _show_ids = 8
+    _id_preview = ", ".join(_prepared_ids[:_show_ids])
+    if len(_prepared_ids) > _show_ids:
+        _id_preview += f" … and {len(_prepared_ids) - _show_ids} more"
     st.info(
-        f"Step 1 complete — **{chunk_count}** requirement(s) ready. "
+        f"Step 1 complete — **{chunk_count}** requirement(s) ready "
+        f"({st.session_state.get('req_doc_name', 'document')}). "
         f"Estimated **~{est_cases}** test cases at this level. "
         f"You can run **Step 2** below."
+    )
+    st.caption(f"Prepared IDs: {_id_preview}")
+    if chunk_count <= 10:
+        with st.expander(f"Parsed requirement text ({chunk_count})", expanded=False):
+            for row in _req_chunks:
+                rid = row.get("requirement_id") or "—"
+                preview = " ".join((row.get("chunk_text") or "").split())
+                if len(preview) > 160:
+                    preview = preview[:160] + "…"
+                st.markdown(f"**{rid}** — {preview}")
+elif chunk_count and _has_run:
+    st.caption(
+        f"**{chunk_count}** requirement(s) prepared for "
+        f"{st.session_state.get('req_doc_name', 'document')}. "
+        "See **Requirements for this run** below."
+    )
+elif st.session_state.get("req_doc_name"):
+    st.warning(
+        f"No requirements loaded for **{st.session_state['req_doc_name']}**. "
+        "Upload the file and click **Prepare requirements** again."
     )
 
 st.markdown(
     "**Step 1:** Ingest requirements from your document  \n"
     "**Step 2:** Generate test cases *(available after step 1)*"
 )
-col_a, col_b = st.columns(2)
+col_a, col_b, col_c = st.columns([1, 1, 1])
 with col_a:
     if st.button(
         "📄 Prepare requirements",
@@ -92,28 +154,54 @@ with col_a:
         else:
             with st.spinner("Parsing requirement IDs, embedding…"):
                 data = uploaded.getvalue()
-                rows = ingest_requirement_document(
+                rows, parse_quality = ingest_requirement_document(
                     repo, pid, uploaded.name, data, module_hint or None
                 )
                 st.session_state["req_doc_name"] = uploaded.name
                 st.session_state["req_chunks"] = rows
+                st.session_state["req_parse_quality"] = parse_quality
+                # Clear stale generation UI (old rule IDs); prepared list above stays visible.
+                st.session_state.pop("last_run", None)
                 detected = [r.get("requirement_id") for r in rows if r.get("requirement_id")]
                 st.success(
                     f"Stored {len(rows)} requirement(s) for {uploaded.name}: "
                     f"{', '.join(detected[:8])}"
                     + ("…" if len(detected) > 8 else "")
                 )
+                if parse_quality == "ambiguous":
+                    st.info(
+                        "Requirement layout looks ambiguous. When you run **Generate test "
+                        "cases**, the Analyst will re-read the document with the LLM "
+                        "(~20–45s) to preserve IDs such as FR-2.4."
+                    )
+                elif parse_quality == "synthetic":
+                    st.caption(
+                        "No explicit requirement IDs detected; synthetic REQ-01… labels "
+                        "apply unless the Analyst finds IDs in the text."
+                    )
                 st.rerun()
+
+with col_c:
+    if st.button(
+        "🔄 Clear workflow",
+        type="primary",
+        use_container_width=True,
+        key="generate_clear_workflow",
+        help="Clears the current upload and generated test cases. Keeps your active project.",
+    ):
+        clear_generate_workflow()
+        st.toast("Workflow cleared — upload a new requirement document.")
+        st.rerun()
 
 with col_b:
     if st.button(
         "🚀 Generate test cases",
-        disabled=not st.session_state.get("req_chunks"),
+        disabled=chunk_count < 1,
         type="primary",
         use_container_width=True,
         key="generate_test_cases",
     ):
-        chunks = st.session_state.get("req_chunks") or []
+        chunks = _resolve_req_chunks()
         if not chunks:
             st.warning("Complete step 1 (Prepare requirements) first.")
         else:
@@ -185,15 +273,47 @@ if st.session_state.get("last_run"):
     bugs = fr.get("retrieved_bugs") or []
     tcs = fr.get("retrieved_tcs") or []
 
+    _current_chunks = st.session_state.get("req_chunks") or []
+    _current_chunk_uuids = {
+        str(r.get("id")) for r in _current_chunks if r.get("id")
+    }
+    _run_chunk_uuids: set[str] = set()
+    for _rule in fr.get("atomic_rules") or []:
+        for _cid in _rule.get("source_requirement_chunk_ids") or []:
+            _run_chunk_uuids.add(str(_cid))
+    _stale_run = bool(
+        _current_chunk_uuids
+        and _run_chunk_uuids
+        and (
+            not _run_chunk_uuids.issubset(_current_chunk_uuids)
+            or _run_chunk_uuids != _current_chunk_uuids
+        )
+    )
+    if _stale_run:
+        _chunk_labels = sorted(
+            {
+                (r.get("requirement_id") or "").strip()
+                for r in _current_chunks
+                if r.get("requirement_id")
+            }
+        )
+        st.warning(
+            "The results below are from a **previous** prepare/generate run (requirement "
+            "chunks in the database no longer match this output). "
+            f"Current prepared IDs: **{', '.join(_chunk_labels[:10])}**"
+            + ("…" if len(_chunk_labels) > 10 else "")
+            + ". Click **Generate test cases** again to refresh this section."
+        )
+
     rules = fr.get("atomic_rules") or []
     if rules:
-        st.markdown(f"### Requirements ({len(rules)})")
+        st.markdown(f"### Requirements for this run ({len(rules)})")
         scopes_seen = sorted({(r.get("screen") or "General") for r in rules})
         st.caption(
             "Scopes identified for RAG (UI screen, service, or functional area): "
             + ", ".join(scopes_seen)
         )
-        with st.expander("Detected requirements", expanded=False):
+        with st.expander("Requirement list (IDs, scope, summary)", expanded=False):
             for r in rules:
                 scope = r.get("screen") or "General"
                 module = r.get("module") or ""
@@ -363,9 +483,14 @@ if st.session_state.get("last_run"):
             _render_case_card(case, [])
 
     vc = fr.get("validated_cases") or []
-    st.markdown(f"### Accepted test cases ({len(vc)})")
+    st.markdown(f"### Test cases by requirement ({len(vc)} total)")
 
     if vc:
+        st.info(
+            "Each row below is one **requirement**. "
+            "**Click a row to expand** and view the generated test cases "
+            "(steps, expected results, and traceability)."
+        )
         st.caption(
             "Download accepted cases from **this run only**. "
             "For all project test cases (all runs and imports), use **Library**."

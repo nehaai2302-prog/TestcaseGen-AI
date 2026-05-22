@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import re
+from collections import defaultdict
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -12,6 +14,72 @@ from agent.llm import get_analyst_chat_model, get_model_name
 from agent.models import AnalystResult
 from agent.prompts import ANALYST_SYSTEM, ANALYST_USER, REQUIREMENT_CHUNKS_BLOCK
 from agent.state import TestGenState
+from services.chunking import RequirementSplit, structured_splits_low_confidence
+
+_SYNTHETIC_REQ_RE = re.compile(r"^REQ-\d{2}$", re.IGNORECASE)
+
+
+def _parent_id_for_rule(
+    rule: dict[str, Any],
+    chunk_by_id: dict[str, dict[str, Any]],
+    synthetic_chunk_ids: set[str],
+) -> str:
+    """Resolve the display parent ID used when suffixing duplicate rule_ids."""
+    rid = (rule.get("rule_id") or "").strip()
+    for cid in rule.get("source_requirement_chunk_ids") or []:
+        chunk = chunk_by_id.get(str(cid))
+        if not chunk:
+            continue
+        chunk_rid = (chunk.get("requirement_id") or "").strip()
+        if chunk_rid:
+            return chunk_rid
+    if rid in synthetic_chunk_ids or _SYNTHETIC_REQ_RE.match(rid):
+        return rid
+    return rid
+
+
+def ensure_unique_rule_ids(
+    rules: list[dict[str, Any]],
+    chunks: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Assign unique rule_id per capability when the LLM reused the same ID."""
+    if not rules:
+        return rules
+
+    chunk_by_id = {str(c.get("id")): c for c in chunks if c.get("id")}
+    synthetic_chunk_ids = {
+        (c.get("requirement_id") or "").strip()
+        for c in chunks
+        if c.get("is_synthetic_requirement") and (c.get("requirement_id") or "").strip()
+    }
+
+    id_counts: dict[str, int] = defaultdict(int)
+    for rule in rules:
+        rid = (rule.get("rule_id") or "").strip()
+        if rid:
+            id_counts[rid] += 1
+
+    duplicates = {rid for rid, count in id_counts.items() if count > 1}
+    if not duplicates:
+        return rules
+
+    per_parent: dict[str, int] = defaultdict(int)
+    out: list[dict[str, Any]] = []
+    for rule in rules:
+        row = dict(rule)
+        rid = (row.get("rule_id") or "").strip()
+        if rid not in duplicates:
+            out.append(row)
+            continue
+
+        parent = _parent_id_for_rule(row, chunk_by_id, synthetic_chunk_ids)
+        per_parent[parent] += 1
+        new_id = f"{parent}-{per_parent[parent]}"
+        row["rule_id"] = new_id
+        row["requirement_id"] = new_id
+        out.append(row)
+
+    return out
 
 
 def _summary_from_text(text: str, requirement_id: str) -> str:
@@ -21,11 +89,24 @@ def _summary_from_text(text: str, requirement_id: str) -> str:
     return cleaned[:220] or requirement_id
 
 
+def _chunks_as_splits(chunks: list[dict[str, Any]]) -> list[RequirementSplit]:
+    return [
+        RequirementSplit(
+            requirement_id=(c.get("requirement_id") or "").strip() or None,
+            text=c.get("chunk_text") or "",
+            is_synthetic=bool(c.get("is_synthetic_requirement")),
+        )
+        for c in chunks
+    ]
+
+
 def _requirements_from_structured_chunks(
     chunks: list[dict[str, Any]],
     module_hint: str | None,
 ) -> list[dict[str, Any]]:
     if chunks and all(c.get("is_synthetic_requirement") for c in chunks):
+        return []
+    if structured_splits_low_confidence(_chunks_as_splits(chunks)):
         return []
 
     requirements: list[dict[str, Any]] = []
@@ -67,8 +148,8 @@ def analyze_requirements(state: TestGenState) -> dict[str, Any]:
             "atomic_rules": structured,
             "requirements": structured,
             "reasoning": (
-                "Requirement IDs were detected in the document, so the Analyst "
-                "preserved the source requirement IDs instead of inventing RULE labels."
+                "Structured requirement IDs were detected with high confidence; "
+                "source IDs were preserved without an LLM pass."
             ),
             "current_step": "analyze_requirements",
             "model_name": get_model_name(),
@@ -84,8 +165,8 @@ def analyze_requirements(state: TestGenState) -> dict[str, Any]:
     sys = ANALYST_SYSTEM.format(max_rules=max_rules)
 
     llm = get_analyst_chat_model()
-    structured = llm.with_structured_output(AnalystResult)
-    result: AnalystResult = structured.invoke(
+    structured_llm = llm.with_structured_output(AnalystResult)
+    result: AnalystResult = structured_llm.invoke(
         [SystemMessage(content=sys), HumanMessage(content=user)]
     )
 
@@ -99,10 +180,20 @@ def analyze_requirements(state: TestGenState) -> dict[str, Any]:
         if not (rule.get("screen") or "").strip():
             rule["screen"] = "General"
 
+    rules = ensure_unique_rule_ids(rules, chunks)
+
+    reasoning = result.reasoning or ""
+    if not all(c.get("is_synthetic_requirement") for c in chunks):
+        reasoning = (
+            "Automatic ID detection looked ambiguous; the Analyst LLM re-read the "
+            "document chunks to preserve or repair requirement IDs. "
+            + reasoning
+        )
+
     return {
         "atomic_rules": rules,
         "requirements": rules,
-        "reasoning": result.reasoning,
+        "reasoning": reasoning,
         "current_step": "analyze_requirements",
         "model_name": get_model_name(),
     }

@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 
 from services.bootstrap import get_repo
 from services.project_ui import active_project_name
+from services.session_project import set_active_project
 from theme import (
     apply_theme,
     render_active_project_banner,
@@ -74,7 +75,7 @@ else:
     names = list(opts.keys())
     valid_ids = {p["id"] for p in projects}
     if st.session_state.get("project_id") not in valid_ids:
-        st.session_state["project_id"] = projects[0]["id"]
+        set_active_project(str(projects[0]["id"]))
     default_idx = 0
     for i, p in enumerate(projects):
         if p["id"] == st.session_state.get("project_id"):
@@ -92,7 +93,7 @@ else:
             index=default_idx,
             key="home_project_name",
         )
-    st.session_state["project_id"] = opts[choice]
+    set_active_project(str(opts[choice]))
     with manage:
         st.markdown("<div style='height:1.6rem'></div>", unsafe_allow_html=True)
         st.page_link("pages/Settings.py", label="Manage in Settings →")

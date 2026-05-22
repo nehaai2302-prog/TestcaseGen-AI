@@ -5,6 +5,7 @@ from __future__ import annotations
 import streamlit as st
 
 from services.bootstrap import get_repo
+from services.session_project import clear_active_project, set_active_project
 from theme import apply_theme, render_back_to_home_link
 
 apply_theme()
@@ -27,7 +28,7 @@ with st.form("new_project"):
             st.error("Name is required.")
         else:
             p = repo.create_project(name.strip(), desc.strip() or None)
-            st.session_state["project_id"] = p["id"]
+            set_active_project(str(p["id"]))
             st.success(f"Created project **{p['name']}**. Head back to Home to continue.")
             st.page_link("Home.py", label="Continue on Home →", icon="🏠")
 
@@ -41,7 +42,7 @@ if projects:
     )
     if st.button("🗑️ Delete selected project", type="primary"):
         repo.delete_project(str(del_id))
-        st.session_state.pop("project_id", None)
+        clear_active_project()
         st.success("Deleted. Refresh sidebar.")
         st.rerun()
 
