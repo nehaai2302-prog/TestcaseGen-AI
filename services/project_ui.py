@@ -2,7 +2,18 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
+
+# Leading list markers the LLM often embeds (UI/export add their own index).
+_STEP_LEADING_NUM = re.compile(
+    r"^\s*(?:"
+    r"\(\d+\)\s*"
+    r"|\d+[\.\)]\s*"
+    r"|(?:step\s*)?\d+\s*:\s*"
+    r")",
+    re.IGNORECASE,
+)
 
 MODULE_ALL = "(All modules)"
 MODULE_NONE = "(No module)"
@@ -11,7 +22,7 @@ MODULE_NONE_SENTINEL = "__none__"
 
 def active_project_name(projects: list[dict[str, Any]], project_id: str) -> str:
     for p in projects:
-        if p.get("id") == project_id:
+        if str(p.get("id")) == str(project_id):
             return str(p.get("name") or "Unnamed project")
     return "Unknown project"
 
@@ -47,6 +58,42 @@ def module_label_for_filter(module_filter: str | None) -> str:
     if module_filter == MODULE_NONE_SENTINEL:
         return MODULE_NONE
     return module_filter
+
+
+def normalize_test_steps(steps: object) -> list[str]:
+    """Coerce DB/LLM steps to a list of non-empty strings."""
+    if steps is None:
+        return []
+    if isinstance(steps, list):
+        return [str(s) for s in steps if str(s).strip()]
+    text = str(steps).strip()
+    return [text] if text else []
+
+
+def strip_step_number_prefix(step: str) -> str:
+    """Remove embedded step numbers (e.g. '1. Click…' -> 'Click…')."""
+    text = str(step or "").strip()
+    while text:
+        match = _STEP_LEADING_NUM.match(text)
+        if not match:
+            break
+        text = text[match.end() :].lstrip()
+    return text
+
+
+def clean_test_steps(steps: object) -> list[str]:
+    """Steps ready for display/export numbering (no duplicate 1.1. prefixes)."""
+    return [
+        strip_step_number_prefix(s)
+        for s in normalize_test_steps(steps)
+        if strip_step_number_prefix(s)
+    ]
+
+
+def format_numbered_steps_text(steps: object) -> str:
+    """Single block of 1. … 2. … lines for CSV/XLSX export."""
+    cleaned = clean_test_steps(steps)
+    return "\n".join(f"{i}. {s}" for i, s in enumerate(cleaned, start=1))
 
 
 def test_cases_breakdown_help(trace: dict[str, Any]) -> str:

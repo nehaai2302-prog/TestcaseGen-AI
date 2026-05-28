@@ -24,8 +24,11 @@ from agent.state import TestGenState
 from services.bootstrap import get_repo
 from services.export import test_cases_to_dataframe, to_csv_bytes, to_excel_bytes
 from services.ingest import ingest_requirement_document
-from services.project_ui import active_project_name
-from services.session_project import clear_generate_workflow
+from services.project_ui import active_project_name, clean_test_steps
+from services.session_project import (
+    clear_generate_workflow,
+    ensure_generate_workflow_for_project,
+)
 from theme import apply_theme, render_active_project_banner, render_back_to_home_link
 
 apply_theme()
@@ -46,6 +49,8 @@ if not pid:
         "Your last project is restored automatically after a browser refresh when the URL includes it."
     )
     st.stop()
+
+ensure_generate_workflow_for_project(str(pid))
 
 _projects = repo.list_projects()
 render_active_project_banner(active_project_name(_projects, pid))
@@ -160,6 +165,7 @@ with col_a:
                 st.session_state["req_doc_name"] = uploaded.name
                 st.session_state["req_chunks"] = rows
                 st.session_state["req_parse_quality"] = parse_quality
+                st.session_state["generate_workflow_project_id"] = str(pid)
                 # Clear stale generation UI (old rule IDs); prepared list above stays visible.
                 st.session_state.pop("last_run", None)
                 detected = [r.get("requirement_id") for r in rows if r.get("requirement_id")]
@@ -267,6 +273,7 @@ with col_b:
                 raise
             else:
                 st.session_state["last_run"] = final
+                st.session_state["generate_workflow_project_id"] = str(pid)
 
 if st.session_state.get("last_run"):
     fr = st.session_state["last_run"]
@@ -429,7 +436,7 @@ if st.session_state.get("last_run"):
             '<div class="tc-section-label tc-steps">📝 Test steps</div>',
             unsafe_allow_html=True,
         )
-        for idx, step in enumerate(case.get("steps") or [], start=1):
+        for idx, step in enumerate(clean_test_steps(case.get("steps")), start=1):
             st.markdown(f"{idx}. {step}")
 
         if case.get("expected_result"):

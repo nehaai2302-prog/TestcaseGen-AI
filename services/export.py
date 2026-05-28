@@ -7,6 +7,8 @@ from typing import Any
 
 import pandas as pd
 
+from services.project_ui import format_numbered_steps_text, normalize_test_steps
+
 
 def _title_case_type(value: Any) -> str:
     text = str(value or "").strip()
@@ -18,11 +20,12 @@ def test_cases_to_dataframe(rows: list[dict[str, Any]]) -> pd.DataFrame:
         return pd.DataFrame()
     flat: list[dict[str, Any]] = []
     for r in rows:
-        steps = r.get("steps") or []
-        if isinstance(steps, list):
-            steps_str = "\n".join(f"{i}. {s}" for i, s in enumerate(steps, start=1))
-        else:
-            steps_str = str(steps)
+        steps = r.get("steps")
+        steps_str = (
+            format_numbered_steps_text(steps)
+            if normalize_test_steps(steps)
+            else str(steps or "")
+        )
         flat.append(
             {
                 "TestCase_ID": r.get("testcase_id") or r.get("id"),

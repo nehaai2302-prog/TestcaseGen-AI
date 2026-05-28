@@ -6,6 +6,7 @@ import streamlit as st
 
 from services.bootstrap import get_repo
 from services.session_project import clear_active_project, set_active_project
+from services.supabase_repo import DuplicateProjectNameError
 from theme import apply_theme, render_back_to_home_link
 
 apply_theme()
@@ -23,14 +24,33 @@ st.subheader("Projects")
 with st.form("new_project"):
     name = st.text_input("Project name")
     desc = st.text_area("Description (optional)")
+    switch_to_new = st.checkbox("Switch to this project now", value=False)
     if st.form_submit_button("➕ Create project"):
-        if not name.strip():
+        clean_name = name.strip()
+        if not clean_name:
             st.error("Name is required.")
+        elif clean_name.lower() in {
+            str(p.get("name") or "").strip().lower() for p in repo.list_projects()
+        }:
+            st.error("A project with this name already exists. Choose a different name.")
         else:
-            p = repo.create_project(name.strip(), desc.strip() or None)
-            set_active_project(str(p["id"]))
-            st.success(f"Created project **{p['name']}**. Head back to Home to continue.")
-            st.page_link("Home.py", label="Continue on Home →", icon="🏠")
+            prev_active_id = str(st.session_state.get("project_id") or "").strip() or None
+            try:
+                p = repo.create_project(clean_name, desc.strip() or None)
+            except DuplicateProjectNameError:
+                st.error("A project with this name already exists. Choose a different name.")
+            else:
+                if switch_to_new:
+                    set_active_project(str(p["id"]))
+                    st.success("Project created and switched.")
+                else:
+                    # Re-assert previous active project so creation never changes context implicitly.
+                    if prev_active_id:
+                        set_active_project(prev_active_id)
+                        st.success("Project created. Active project unchanged.")
+                    else:
+                        st.success("Project created successfully.")
+                st.page_link("Home.py", label="Continue on Home →", icon="🏠")
 
 projects = repo.list_projects()
 if projects:

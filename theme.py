@@ -7,6 +7,8 @@ from typing import Any
 
 import streamlit as st
 
+from services.project_ui import clean_test_steps
+
 _AURORA_CSS = """
 <style>
 [data-testid="stAppViewContainer"] {
@@ -207,6 +209,9 @@ div[data-testid="stMetric"] {
   margin: 0.65rem 0 0 0;
   padding: 0;
 }
+.home-demo-link {
+  margin: 0 0 1.25rem 0;
+}
 .home-empty-state {
   text-align: center;
   margin: 1.5rem 0 1.75rem 0;
@@ -345,6 +350,13 @@ div[data-testid="stMetric"] {
   border: 1px solid rgba(251, 191, 36, 0.35);
   color: #fcd34d;
 }
+.home-project-helper-label {
+  font-size: 1rem;
+  line-height: 1.5;
+  font-weight: 400;
+  color: rgba(250, 250, 250, 0.98);
+  margin: 0 0 0.25rem 0;
+}
 
 button[kind="primary"],
 .stDownloadButton button[kind="primary"],
@@ -388,6 +400,101 @@ button[kind="primary"],
 .st-key-lib_export_xlsx button:hover {
   background: linear-gradient(135deg, #2dd4bf 0%, #0e8a7a 50%, #0e5c5c 100%) !important;
   border-color: #7dd3fc !important;
+  color: #ffffff !important;
+}
+
+/* Demo page — Open in new tab */
+.st-key-demo_open_new_tab {
+  margin: 0 0 1rem 0;
+}
+.st-key-demo_open_new_tab a,
+.st-key-demo_open_new_tab [data-testid="stLinkButton"] {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0.55rem 1.25rem !important;
+  border-radius: 10px !important;
+  background: linear-gradient(
+    135deg,
+    #7c5cff 0%,
+    #4a3580 55%,
+    #2a1f66 100%
+  ) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(184, 163, 255, 0.55) !important;
+  font-weight: 600 !important;
+  text-decoration: none !important;
+  box-shadow: 0 2px 10px rgba(124, 92, 255, 0.35) !important;
+}
+.st-key-demo_open_new_tab a:hover,
+.st-key-demo_open_new_tab [data-testid="stLinkButton"]:hover {
+  background: linear-gradient(
+    135deg,
+    #8f73ff 0%,
+    #5c45a8 55%,
+    #3d2d7a 100%
+  ) !important;
+  border-color: #c4b5fd !important;
+  color: #ffffff !important;
+}
+
+/* Demo page — chapter list (compact rows + Jump buttons) */
+.demo-chapters-block {
+  margin-top: 0.25rem;
+}
+div[data-testid="stHorizontalBlock"]:has([class*="st-key-demo_chapter_jump"]) {
+  gap: 0.65rem !important;
+  align-items: center !important;
+  margin-bottom: 0.35rem !important;
+  padding: 0.4rem 0.65rem !important;
+  border-radius: 10px !important;
+  background: rgba(26, 31, 61, 0.55) !important;
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+}
+div[data-testid="stHorizontalBlock"]:has([class*="st-key-demo_chapter_jump"])
+  [data-testid="stMarkdownContainer"] p {
+  margin: 0 !important;
+  line-height: 1.35 !important;
+}
+.demo-chapters__time {
+  font-weight: 600;
+  color: rgba(196, 181, 253, 0.95);
+  font-variant-numeric: tabular-nums;
+}
+[class*="st-key-demo_chapter_jump"] {
+  margin: 0 !important;
+}
+[class*="st-key-demo_chapter_jump"] a,
+[class*="st-key-demo_chapter_jump"] [data-testid="stLinkButton"] {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+  min-width: 3.75rem !important;
+  padding: 0.32rem 0.7rem !important;
+  border-radius: 8px !important;
+  background: linear-gradient(
+    135deg,
+    #5c45a8 0%,
+    #4a3580 50%,
+    #3d2d7a 100%
+  ) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(184, 163, 255, 0.45) !important;
+  font-weight: 600 !important;
+  font-size: 0.8rem !important;
+  text-decoration: none !important;
+  box-shadow: 0 1px 6px rgba(92, 69, 168, 0.35) !important;
+}
+[class*="st-key-demo_chapter_jump"] a:hover,
+[class*="st-key-demo_chapter_jump"] [data-testid="stLinkButton"]:hover {
+  background: linear-gradient(
+    135deg,
+    #6d56c4 0%,
+    #5c45a8 50%,
+    #4a3580 100%
+  ) !important;
+  border-color: #c4b5fd !important;
   color: #ffffff !important;
 }
 
@@ -470,6 +577,52 @@ def render_active_project_banner(project_name: str) -> None:
         "</div>",
         unsafe_allow_html=True,
     )
+
+
+def render_demo_chapters(
+    *,
+    video_url: str,
+    chapters: tuple[tuple[str, int, str], ...],
+) -> None:
+    """Compact chapter list with Jump links (new tab) beside each title."""
+    st.subheader("Chapters")
+    st.caption("Jump opens the video in a new tab at that timestamp.")
+    st.markdown('<div class="demo-chapters-block"></div>', unsafe_allow_html=True)
+
+    _pad, block, _pad2 = st.columns([0.35, 7, 0.35])
+    with block:
+        for i, (time_label, seconds, title) in enumerate(chapters):
+            time_col, title_col, jump_col = st.columns(
+                [0.85, 3.35, 0.8], gap="small", vertical_alignment="center"
+            )
+            with time_col:
+                safe_time = html.escape(time_label)
+                st.markdown(
+                    f'<span class="demo-chapters__time">{safe_time}</span>',
+                    unsafe_allow_html=True,
+                )
+            with title_col:
+                st.markdown(html.escape(title))
+            with jump_col:
+                st.link_button(
+                    "Jump",
+                    f"{video_url}#t={seconds}",
+                    key=f"demo_chapter_jump_{i}",
+                    help=f"Open at {time_label} — {title}",
+                )
+
+
+def render_home_demo_link(*, enabled: bool = True) -> None:
+    """One-line entry to the dedicated Demo page (keeps Home uncluttered)."""
+    if not enabled:
+        return
+    st.markdown('<div class="home-demo-link">', unsafe_allow_html=True)
+    st.page_link(
+        "pages/Demo.py",
+        label="Watch the 8‑min Workflow Demo →",
+        icon="🎬",
+    )
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_home_welcome(
@@ -640,15 +793,6 @@ def render_gradient_metric(
     )
 
 
-def _normalize_steps(steps: object) -> list[str]:
-    if steps is None:
-        return []
-    if isinstance(steps, list):
-        return [str(s) for s in steps if str(s).strip()]
-    text = str(steps).strip()
-    return [text] if text else []
-
-
 def render_test_case_card(case: dict[str, Any], *, history_linked: bool = False) -> None:
     """Readable test case body (matches Generate page card styling)."""
     test_type = (case.get("test_type") or "").strip().lower()
@@ -684,7 +828,7 @@ def render_test_case_card(case: dict[str, Any], *, history_linked: bool = False)
         )
         st.markdown(case["preconditions"])
 
-    step_list = _normalize_steps(case.get("steps"))
+    step_list = clean_test_steps(case.get("steps"))
     if step_list:
         st.markdown(
             '<div class="tc-section-label tc-steps">📝 Test steps</div>',

@@ -19,6 +19,7 @@ st.set_page_config(
 
 pages = [
     st.Page("Home.py", title="Home", icon="🏠"),
+    st.Page("pages/Demo.py", title="Demo", icon="🎬"),
     st.Page("pages/Dashboard.py", title="Dashboard", icon="📊"),
     st.Page("pages/Generate.py", title="Generate", icon="🪄"),
     st.Page("pages/Library.py", title="Library", icon="📚"),

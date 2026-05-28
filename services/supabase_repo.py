@@ -11,6 +11,10 @@ from supabase import Client, create_client
 from services.project_ui import MODULE_NONE_SENTINEL
 
 
+class DuplicateProjectNameError(RuntimeError):
+    """Raised when creating a project with an existing normalized name."""
+
+
 def _filter_rows_by_module(
     rows: list[dict[str, Any]],
     module_filter: str | None,
@@ -40,12 +44,23 @@ class SupabaseRepo:
     def client(self) -> Client:
         return self._client
 
+    def get_demo_video_url(self) -> str | None:
+        return get_demo_video_url(self._client)
+
     # --- Projects ---
 
     def create_project(self, name: str, description: str | None = None) -> dict[str, Any]:
         row = {"name": name, "description": description or ""}
-        res = self._client.table("projects").insert(row).execute()
-        return res.data[0]
+        try:
+            res = self._client.table("projects").insert(row).execute()
+            return res.data[0]
+        except Exception as e:
+            msg = str(e).lower()
+            if "duplicate key" in msg and "ux_projects_name_norm" in msg:
+                raise DuplicateProjectNameError(
+                    "A project with this name already exists."
+                ) from e
+            raise
 
     def list_projects(self) -> list[dict[str, Any]]:
         res = (
@@ -288,6 +303,24 @@ class SupabaseRepo:
             .execute()
         )
         return res.data or []
+
+
+def get_demo_video_url(client: Client | None = None) -> str | None:
+    """Signed URL for a demo video in private Supabase Storage (regenerated each call)."""
+    bucket = os.getenv("DEMO_VIDEO_BUCKET", "").strip()
+    path = os.getenv("DEMO_VIDEO_PATH", "").strip().lstrip("/")
+    if not bucket or not path:
+        return None
+    ttl = int(os.getenv("DEMO_VIDEO_SIGNED_URL_TTL", "86400"))
+    try:
+        res = (client or _get_client()).storage.from_(bucket).create_signed_url(path, ttl)
+    except Exception:
+        return None
+    if isinstance(res, dict):
+        url = res.get("signedURL") or res.get("signed_url")
+        return str(url).strip() if url else None
+    signed = getattr(res, "signed_url", None) or getattr(res, "signedURL", None)
+    return str(signed).strip() if signed else None
 
 
 def content_hash(text: str) -> str:

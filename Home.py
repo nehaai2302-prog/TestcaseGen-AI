@@ -16,10 +16,18 @@ from theme import (
     render_active_project_banner,
     render_home_action_card,
     render_home_api_status,
+    render_home_demo_link,
     render_home_empty_state,
     render_home_welcome,
     render_home_your_path,
 )
+
+
+def _sync_active_project_from_home_picker() -> None:
+    """Update active project only when user changes the Home dropdown."""
+    picked = str(st.session_state.get("home_project_id") or "").strip()
+    if picked:
+        set_active_project(picked)
 
 
 def _home_step_progress(repo: Any, project_id: str | None) -> tuple[int | None, set[int]]:
@@ -55,6 +63,8 @@ except Exception as e:
     st.error(f"❌ Configuration error: {e}")
     st.stop()
 
+demo_video_url = repo.get_demo_video_url()
+
 projects = repo.list_projects()
 api_ready = bool(os.getenv("OPENAI_API_KEY"))
 
@@ -63,6 +73,7 @@ if not projects:
         "Welcome to AI-powered test generation for QA teams",
         accent=True,
     )
+    render_home_demo_link(enabled=bool(demo_video_url))
     render_home_empty_state()
     render_home_your_path(active_step=1, completed_steps=set())
 else:
@@ -70,32 +81,37 @@ else:
         "Welcome back",
         subtitle="Glad to see you again. Let's keep building up Quality!",
     )
+    render_home_demo_link(enabled=bool(demo_video_url))
 
-    opts = {p["name"]: p["id"] for p in projects}
-    names = list(opts.keys())
-    valid_ids = {p["id"] for p in projects}
-    if st.session_state.get("project_id") not in valid_ids:
+    project_name_by_id = {str(p["id"]): p["name"] for p in projects}
+    project_ids = list(project_name_by_id.keys())
+    valid_ids = {str(p["id"]) for p in projects}
+    current_project_id = str(st.session_state.get("project_id") or "")
+    if current_project_id not in valid_ids:
         set_active_project(str(projects[0]["id"]))
-    default_idx = 0
-    for i, p in enumerate(projects):
-        if p["id"] == st.session_state.get("project_id"):
-            default_idx = i
-            break
-    render_active_project_banner(
-        active_project_name(projects, st.session_state["project_id"])
-    )
+        current_project_id = str(projects[0]["id"])
+
+    # Keep picker state aligned to active project, unless user changes it.
+    if str(st.session_state.get("home_project_id") or "") not in valid_ids:
+        st.session_state["home_project_id"] = current_project_id
 
     pick, manage = st.columns([3, 1])
     with pick:
-        choice = st.selectbox(
+        st.selectbox(
             "Which product are you testing?",
-            options=names,
-            index=default_idx,
-            key="home_project_name",
+            options=project_ids,
+            format_func=lambda pid: project_name_by_id.get(pid, "Unnamed project"),
+            key="home_project_id",
+            on_change=_sync_active_project_from_home_picker,
         )
-    set_active_project(str(opts[choice]))
+    render_active_project_banner(
+        active_project_name(projects, st.session_state["project_id"])
+    )
     with manage:
-        st.markdown("<div style='height:1.6rem'></div>", unsafe_allow_html=True)
+        st.markdown(
+            '<div class="home-project-helper-label">Need another project?</div>',
+            unsafe_allow_html=True,
+        )
         st.page_link("pages/Settings.py", label="Manage in Settings →")
 
     step_active, step_done = _home_step_progress(

@@ -258,7 +258,9 @@ See [`docs/VERIFICATION.md`](docs/VERIFICATION.md) for a lightweight gold-style 
 
 ## Demo video
 
-Record a ~5 minute walkthrough: create project → import CSVs → ingest requirements → run pipeline (show reasoning / loop-back if triggered) → library search → traceability → export. Upload per your course instructions.
+Record a walkthrough: create project → import CSVs → ingest requirements → run pipeline → library search → traceability → export.
+
+Optional in-app playback: upload `testcraft-demo.mp4` to a **private** Supabase Storage bucket and set `DEMO_VIDEO_BUCKET`, `DEMO_VIDEO_PATH`, and `DEMO_VIDEO_SIGNED_URL_TTL` in `.env` / Streamlit secrets. Use the **Demo** nav page (or the link on Home) for the **Workflow Demo** player; **Open video in new tab** uses a signed URL refreshed on each load.
 
 ## Project layout
 
@@ -266,6 +268,7 @@ Record a ~5 minute walkthrough: create project → import CSVs → ingest requir
 |------|---------|
 | `app.py` | Streamlit navigation entrypoint |
 | `Home.py` | Home + project selection |
+| `pages/Demo.py` | Workflow Demo video (signed URL from Storage) |
 | `pages/Dashboard.py` | Project metrics |
 | `pages/Generate.py` | Requirement ingest + LangGraph pipeline |
 | `pages/Library.py` | Semantic search and export |

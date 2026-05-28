@@ -11,6 +11,9 @@ CREATE TABLE IF NOT EXISTS projects (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS ux_projects_name_norm
+    ON projects (lower(btrim(name)));
+
 CREATE TABLE IF NOT EXISTS requirements (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,

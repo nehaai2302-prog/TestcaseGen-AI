@@ -64,13 +64,29 @@ def restore_project_from_session() -> None:
 
 def set_active_project(project_id: str) -> None:
     """Select workspace for this browser session and persist in the URL."""
-    st.session_state["project_id"] = project_id
-    sync_project_to_url(project_id)
+    new_id = str(project_id).strip()
+    prev_id = str(st.session_state.get("project_id") or "").strip()
+    if prev_id and prev_id != new_id:
+        clear_generate_workflow()
+    st.session_state["project_id"] = new_id
+    st.session_state["generate_workflow_project_id"] = new_id
+    sync_project_to_url(new_id)
 
 
 def clear_active_project() -> None:
     st.session_state.pop("project_id", None)
+    st.session_state.pop("generate_workflow_project_id", None)
+    clear_generate_workflow()
     sync_project_to_url(None)
+
+
+def ensure_generate_workflow_for_project(project_id: str) -> None:
+    """Drop prepared requirements / last run when the active project changes."""
+    pid = str(project_id).strip()
+    bound = str(st.session_state.get("generate_workflow_project_id") or "").strip()
+    if bound != pid:
+        clear_generate_workflow()
+        st.session_state["generate_workflow_project_id"] = pid
 
 
 def clear_generate_workflow() -> None:
