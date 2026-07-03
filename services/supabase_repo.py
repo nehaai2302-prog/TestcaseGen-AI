@@ -1,4 +1,4 @@
-"""Supabase / Postgres data access for TestCraft AI."""
+"""Supabase / Postgres data access for QAWeave AI."""
 
 from __future__ import annotations
 

@@ -1,10 +1,12 @@
-# TestCraft AI
+# QAWeave AI
+
+*Weaves traceable test cases from your requirements, informed by your past bugs and test history.*
 
 ## Problem & goal
 
 QA teams spend significant time turning requirement documents into manual test cases while keeping traceability to source specs and awareness of past defects. Requirements, bug history, and existing tests often live in separate tools, so new coverage can miss regressions that already appeared on the same screen, service, or functional area.
 
-**TestCraft AI** addresses that gap: upload a requirement document, optionally import project bugs and test cases, and run a **multi-agent pipeline** that produces structured, review-ready manual tests linked to requirement IDs. Retrieval-augmented generation (RAG) over **Supabase pgvector** surfaces relevant history before each requirement is written up, so generated cases can reflect real regression risk—not generic templates.
+**QAWeave AI** addresses that gap: upload a requirement document, optionally import project bugs and test cases, and run a **multi-agent pipeline** that produces structured, review-ready manual tests linked to requirement IDs. Retrieval-augmented generation (RAG) over **Supabase pgvector** surfaces relevant history before each requirement is written up, so generated cases can reflect real regression risk—not generic templates.
 
 **How it works (summary):** documents are chunked and embedded at prepare time; **LangGraph** runs an Analyst step, scope-aware per-rule retrieval, parallel test generation, optional coverage review, deduplication, and persistence. **Streamlit** provides ingest, generation, semantic library search, a traceability matrix, and CSV/XLSX export. Optional **[LangSmith](https://smith.langchain.com)** tracing records each pipeline run for debugging and evaluation.
 
@@ -18,7 +20,7 @@ QA teams spend significant time turning requirement documents into manual test c
 |---|---|
 | **Situation** | QA maintains requirements, historical bugs, and test libraries; manual test design is repetitive and must stay traceable to specs. |
 | **Complication** | Writing cases from prose is slow; new features may not reuse lessons from prior bugs on the same checkout flow, API, or audit area. |
-| **Resolution** | TestCraft AI ingests requirements, retrieves scope-aware project history via RAG, and runs a bounded LangGraph workflow to generate linked test cases with coverage checks, dedup, and export. |
+| **Resolution** | QAWeave AI ingests requirements, retrieves scope-aware project history via RAG, and runs a bounded LangGraph workflow to generate linked test cases with coverage checks, dedup, and export. |
 
 **SMART objectives (demo scope)**
 
@@ -260,7 +262,7 @@ See [`docs/VERIFICATION.md`](docs/VERIFICATION.md) for a lightweight gold-style 
 
 Record a walkthrough: create project → import CSVs → ingest requirements → run pipeline → library search → traceability → export.
 
-Optional in-app playback: upload `testcraft-demo.mp4` to a **private** Supabase Storage bucket and set `DEMO_VIDEO_BUCKET`, `DEMO_VIDEO_PATH`, and `DEMO_VIDEO_SIGNED_URL_TTL` in `.env` / Streamlit secrets. Use the **Demo** nav page (or the link on Home) for the **Workflow Demo** player; **Open video in new tab** uses a signed URL refreshed on each load.
+Optional in-app playback: upload `qaweave-demo.mp4` to a **private** Supabase Storage bucket and set `DEMO_VIDEO_BUCKET`, `DEMO_VIDEO_PATH`, and `DEMO_VIDEO_SIGNED_URL_TTL` in `.env` / Streamlit secrets. Use the **Demo** nav page (or the link on Home) for the **Workflow Demo** player; **Open video in new tab** uses a signed URL refreshed on each load.
 
 ## Project layout
 

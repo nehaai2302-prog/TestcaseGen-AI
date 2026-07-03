@@ -7,6 +7,7 @@ import streamlit as st
 from services.bootstrap import get_repo
 from services.export import test_cases_to_dataframe, to_csv_bytes, to_excel_bytes
 from services.library_search import library_test_case_rows
+from services.openai_errors import friendly_openai_error, remember_openai_probe_failure
 from services.project_ui import MODULE_NONE_SENTINEL, active_project_name
 from theme import (
     apply_theme,
@@ -102,25 +103,33 @@ if _has_deep_link:
         st.session_state.lib_prev_selected_case_id = None
         st.rerun()
 
-if q.strip():
-    with st.spinner("Searching test cases…"):
+try:
+    if q.strip():
+        with st.spinner("Searching test cases…"):
+            rows, search_mode = library_test_case_rows(
+                repo,
+                pid,
+                q,
+                test_type=tfilter,
+                priority=pfilter,
+                source=sfilter,
+            )
+    else:
         rows, search_mode = library_test_case_rows(
             repo,
             pid,
-            q,
+            "",
             test_type=tfilter,
             priority=pfilter,
             source=sfilter,
         )
-else:
-    rows, search_mode = library_test_case_rows(
-        repo,
-        pid,
-        "",
-        test_type=tfilter,
-        priority=pfilter,
-        source=sfilter,
-    )
+except Exception as exc:
+    msg = friendly_openai_error(exc)
+    if msg:
+        remember_openai_probe_failure(exc)
+        st.error(msg)
+        st.stop()
+    raise
 
 if _module_filter_sentinel == MODULE_NONE_SENTINEL:
     rows = [r for r in rows if not (r.get("module") or "").strip()]

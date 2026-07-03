@@ -1,1 +1,1 @@
-# Services package for TestCraft AI
+# Services package for QAWeave AI

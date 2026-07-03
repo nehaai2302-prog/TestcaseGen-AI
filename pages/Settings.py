@@ -7,6 +7,7 @@ import streamlit as st
 from services.bootstrap import get_repo
 from services.session_project import clear_active_project, set_active_project
 from services.supabase_repo import DuplicateProjectNameError
+from services.openai_errors import KEY_INVALID_MSG, KEY_MISSING_MSG, resolve_openai_banner_message
 from theme import apply_theme, render_back_to_home_link
 
 apply_theme()
@@ -73,15 +74,17 @@ st.session_state["retrieval_threshold"] = st.slider(
     "Similarity threshold", 0.05, 0.5, 0.15, step=0.01
 )
 
-st.subheader("Secrets")
-st.markdown(
-    """
-Configure locally via `.env` (see `.env.example`) or **Streamlit Cloud secrets**:
-
-- `OPENAI_API_KEY`
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
-
-Optional: `OPENAI_CHAT_MODEL`, `OPENAI_EMBEDDING_MODEL`, `RETRIEVAL_TOP_K`, `RETRIEVAL_MATCH_THRESHOLD`, `DEDUP_SIMILARITY_THRESHOLD`.
-"""
-)
+banner_msg = resolve_openai_banner_message()
+if banner_msg:
+    st.subheader("AI setup")
+    st.warning(banner_msg)
+    if banner_msg == KEY_MISSING_MSG:
+        st.caption(
+            "Deployers: set the API key in `.env` (see `.env.example`) or "
+            "**Streamlit Cloud → Secrets**, then restart the app."
+        )
+    elif banner_msg == KEY_INVALID_MSG:
+        st.caption(
+            "Deployers: update the API key in `.env` or **Streamlit Cloud → Secrets**, "
+            "then restart the app."
+        )

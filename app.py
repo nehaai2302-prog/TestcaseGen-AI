@@ -5,17 +5,20 @@ from __future__ import annotations
 from dotenv import load_dotenv
 import streamlit as st
 
+from services.openai_errors import render_openai_key_banner
 from services.session_project import restore_project_from_session
 
 load_dotenv()
 restore_project_from_session()
 
 st.set_page_config(
-    page_title="TestCraft AI",
+    page_title="QAWeave AI",
     page_icon="🧪",
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+render_openai_key_banner()
 
 pages = [
     st.Page("Home.py", title="Home", icon="🏠"),

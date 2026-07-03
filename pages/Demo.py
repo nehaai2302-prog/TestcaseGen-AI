@@ -44,7 +44,6 @@ st.link_button(
     "Open video in new tab",
     demo_video_url,
     type="primary",
-    key="demo_open_new_tab",
     help="Opens the signed playback URL in a new browser tab.",
 )
 st.video(demo_video_url)

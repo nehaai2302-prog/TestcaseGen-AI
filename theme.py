@@ -737,25 +737,16 @@ def render_home_action_card(
     st.page_link(page, label=link_label, use_container_width=True)
 
 
-def render_home_api_status(*, api_ready: bool) -> None:
-    """One-line API readiness strip with Settings link when not configured."""
-    if api_ready:
+def render_home_api_status(*, banner_message: str | None) -> None:
+    """API readiness strip on Home; uses the same message as the global banner."""
+    if banner_message is None:
         st.markdown(
             '<div class="home-api-status home-api-status--ok">'
             '<span>✅</span><span>Ready to generate</span></div>',
             unsafe_allow_html=True,
         )
         return
-    bar, link = st.columns([5, 2])
-    with bar:
-        st.markdown(
-            '<div class="home-api-status home-api-status--warn">'
-            '<span>⚠️</span>'
-            "<span>Setup needed — Add API key in Settings</span></div>",
-            unsafe_allow_html=True,
-        )
-    with link:
-        st.page_link("pages/Settings.py", label="Settings →", use_container_width=True)
+    st.warning(banner_message)
 
 
 def render_gradient_metric(

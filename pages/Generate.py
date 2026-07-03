@@ -24,6 +24,11 @@ from agent.state import TestGenState
 from services.bootstrap import get_repo
 from services.export import test_cases_to_dataframe, to_csv_bytes, to_excel_bytes
 from services.ingest import ingest_requirement_document
+from services.openai_errors import (
+    friendly_openai_error,
+    remember_openai_probe_failure,
+    resolve_openai_banner_message,
+)
 from services.project_ui import active_project_name, clean_test_steps
 from services.session_project import (
     clear_generate_workflow,
@@ -156,12 +161,23 @@ with col_a:
     ):
         if uploaded is None:
             st.warning("Upload a file first.")
+        elif (banner_msg := resolve_openai_banner_message()):
+            st.error(banner_msg)
         else:
-            with st.spinner("Parsing requirement IDs, embedding…"):
-                data = uploaded.getvalue()
-                rows, parse_quality = ingest_requirement_document(
-                    repo, pid, uploaded.name, data, module_hint or None
-                )
+            try:
+                with st.spinner("Parsing requirement IDs, embedding…"):
+                    data = uploaded.getvalue()
+                    rows, parse_quality = ingest_requirement_document(
+                        repo, pid, uploaded.name, data, module_hint or None
+                    )
+            except Exception as exc:
+                msg = friendly_openai_error(exc)
+                if msg:
+                    remember_openai_probe_failure(exc)
+                    st.error(msg)
+                else:
+                    raise
+            else:
                 st.session_state["req_doc_name"] = uploaded.name
                 st.session_state["req_chunks"] = rows
                 st.session_state["req_parse_quality"] = parse_quality
@@ -210,6 +226,8 @@ with col_b:
         chunks = _resolve_req_chunks()
         if not chunks:
             st.warning("Complete step 1 (Prepare requirements) first.")
+        elif (banner_msg := resolve_openai_banner_message()):
+            st.error(banner_msg)
         else:
             if st.session_state.get("retrieval_top_k"):
                 os.environ["RETRIEVAL_TOP_K"] = str(st.session_state["retrieval_top_k"])
@@ -269,8 +287,13 @@ with col_b:
                 pipeline_status.update(label="Pipeline complete", state="complete")
             except Exception as exc:
                 pipeline_status.update(label="Pipeline failed", state="error")
-                st.error(f"Generation failed: {exc}")
-                raise
+                msg = friendly_openai_error(exc)
+                if msg:
+                    remember_openai_probe_failure(exc)
+                    st.error(msg)
+                else:
+                    st.error(f"Generation failed: {exc}")
+                    raise
             else:
                 st.session_state["last_run"] = final
                 st.session_state["generate_workflow_project_id"] = str(pid)

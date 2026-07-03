@@ -11,6 +11,11 @@ import pandas as pd
 import streamlit as st
 
 from services.bootstrap import get_repo
+from services.openai_errors import (
+    friendly_openai_error,
+    remember_openai_probe_failure,
+    resolve_openai_banner_message,
+)
 from services.ingest import (
     ParseResult,
     commit_bugs_csv,
@@ -216,8 +221,19 @@ def _import_tab(
     _render_preview(parsed)
 
     if st.button(f"✅ Confirm import {len(parsed.entities)} {entity_label}", key=f"{tab_key}_commit"):
-        with st.spinner("Embedding and inserting…"):
-            n = commit_fn(repo, project_id, parsed.entities)
+        if banner_msg := resolve_openai_banner_message():
+            st.error(banner_msg)
+            return
+        try:
+            with st.spinner("Embedding and inserting…"):
+                n = commit_fn(repo, project_id, parsed.entities)
+        except Exception as exc:
+            msg = friendly_openai_error(exc)
+            if msg:
+                remember_openai_probe_failure(exc)
+                st.error(msg)
+                return
+            raise
         st.success(f"Imported {n} {entity_label}.")
         st.session_state.pop(parse_key, None)
         st.session_state.pop(fp_key, None)

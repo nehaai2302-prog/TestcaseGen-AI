@@ -1,5 +1,5 @@
 [project]
-name = "testcraft-ai"
+name = "qaweave-ai"
 version = "0.1.0"
 description = "RAG-backed test case generation with LangGraph and Supabase pgvector"
 readme = "README.md"

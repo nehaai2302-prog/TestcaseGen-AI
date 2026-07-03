@@ -1,4 +1,4 @@
--- TestCraft AI: initial schema for Supabase (PostgreSQL + pgvector)
+-- QAWeave AI: initial schema for Supabase (PostgreSQL + pgvector)
 -- Run in Supabase SQL Editor or via migration tooling.
 -- Embedding dimension must match OpenAI text-embedding-3-small default: 1536
 

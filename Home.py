@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
 import streamlit as st
 from dotenv import load_dotenv
 
 from services.bootstrap import get_repo
+from services.openai_errors import resolve_openai_banner_message
 from services.project_ui import active_project_name
 from services.session_project import set_active_project
 from theme import (
@@ -55,7 +55,11 @@ load_dotenv()
 
 apply_theme()
 
-st.title("🧪 TestCraft AI")
+st.title("🧪 QAWeave AI")
+st.caption(
+    "Weaves traceable test cases from your requirements, "
+    "informed by your past bugs and test history."
+)
 
 try:
     repo = get_repo()
@@ -66,7 +70,7 @@ except Exception as e:
 demo_video_url = repo.get_demo_video_url()
 
 projects = repo.list_projects()
-api_ready = bool(os.getenv("OPENAI_API_KEY"))
+openai_banner_message = resolve_openai_banner_message()
 
 if not projects:
     render_home_welcome(
@@ -159,4 +163,4 @@ else:
     q2.page_link("pages/Traceability.py", label="Traceability", icon="🔗")
     q3.page_link("pages/Bugs.py", label="Bug reports", icon="🐛")
 
-render_home_api_status(api_ready=api_ready)
+render_home_api_status(banner_message=openai_banner_message)
