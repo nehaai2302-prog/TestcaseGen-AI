@@ -445,3 +445,52 @@ def test_constraint_passes_availability_sla_not_price_threshold() -> None:
     assert out["constraint_stats"]["valid_cases"] == 1
     assert out["invalid_cases"] == []
 
+
+def test_validate_format_hh00_rejects_non_hour_times_without_crash() -> None:
+    from agent.nodes.validate_constraints import _validate_format
+
+    issues = _validate_format(
+        "Set quiet hours from 22:30 to 07:15",
+        {"type": "format", "field": "quiet_hours", "pattern": "hh:00"},
+    )
+    assert any("22:30" in i for i in issues)
+    assert any("07:15" in i for i in issues)
+
+
+def test_validate_constraints_keeps_already_persisted_despite_violations() -> None:
+    """Regen must not drop saved cases when re-running constraint checks."""
+    bad_case = {
+        "title": "Use threshold $50",
+        "linked_requirement": "FR-9",
+        "preconditions": "Set price threshold to $50.",
+        "steps": ["Enter $50 as the threshold."],
+        "expected_result": "Threshold is accepted.",
+    }
+    state = {
+        "atomic_rules": [
+            {
+                "rule_id": "FR-9",
+                "constraints": [
+                    {
+                        "field": "price_threshold",
+                        "type": "range",
+                        "min": 0.0,
+                        "max": 1.0,
+                        "unit": "€/kWh",
+                    }
+                ],
+            }
+        ],
+        "generated_cases": [
+            {**bad_case, "title": "Saved bad case", "_already_persisted": True},
+            {**bad_case, "title": "Fresh bad draft"},
+        ],
+        "reasoning": "",
+    }
+    out = validate_constraints(state)
+    kept_titles = {c.get("title") for c in out["generated_cases"]}
+    assert "Saved bad case" in kept_titles
+    assert "Fresh bad draft" not in kept_titles
+    assert out["constraint_stats"]["valid_cases"] == 1
+    assert out["constraint_stats"]["invalid_cases"] == 1
+

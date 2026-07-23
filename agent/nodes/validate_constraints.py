@@ -112,12 +112,15 @@ def _validate_enum(case_text: str, c: dict[str, Any]) -> list[str]:
 
 
 def _validate_format(case_text: str, c: dict[str, Any]) -> list[str]:
+    violations: list[str] = []
     pattern = str(c.get("pattern") or "")
     field = str(c.get("field") or "value")
     if pattern == "hh:00":
         for match in _TIME_RE.findall(case_text):
             if not match.endswith(":00"):
-                violations.append(f"{field}: time {match} does not match {pattern} format")
+                violations.append(
+                    f"{field}: time {match} does not match {pattern} format"
+                )
     return violations
 
 
@@ -179,6 +182,10 @@ def validate_constraints(state: TestGenState) -> dict[str, Any]:
     violations_summary: list[dict[str, Any]] = []
 
     for case in generated:
+        # Regen / fill-gaps: keep already-saved cases as-is (same as dedup).
+        if case.get("_already_persisted"):
+            valid_cases.append(case)
+            continue
         rid = str(case.get("linked_requirement") or "")
         linked_rule = rule_by_id.get(rid) or {}
         constraints = constraints_for_case(

@@ -246,6 +246,8 @@ def oracle_validate(state: TestGenState) -> dict[str, Any]:
     heuristic_valid: list[tuple[int, dict[str, Any]]] = []
 
     for idx, case in enumerate(cases):
+        if case.get("_already_persisted"):
+            continue
         rid = str(case.get("linked_requirement") or "")
         requirement = rule_by_id.get(rid) or {}
         findings = _heuristic_findings(requirement, case)
@@ -273,6 +275,9 @@ def oracle_validate(state: TestGenState) -> dict[str, Any]:
     findings_summary: list[dict[str, Any]] = []
 
     for idx, case in enumerate(cases):
+        if case.get("_already_persisted"):
+            valid_cases.append(case)
+            continue
         title = str(case.get("title") or "")
         findings = list(heuristic_rejections.get(idx) or [])
         if not findings and title in llm_rejections:

@@ -74,6 +74,9 @@ def validate_expectations(state: TestGenState) -> dict[str, Any]:
     violations_summary: list[dict[str, Any]] = []
 
     for case in generated:
+        if case.get("_already_persisted"):
+            valid_cases.append(case)
+            continue
         rid = str(case.get("linked_requirement") or "")
         linked_rule = rule_by_id.get(rid) or {}
         constraints = constraints_for_case(
