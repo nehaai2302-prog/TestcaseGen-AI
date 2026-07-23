@@ -5,7 +5,7 @@ from __future__ import annotations
 import streamlit as st
 
 from services.supabase_auth import is_authenticated, sign_out
-from theme import apply_theme
+from theme import apply_theme, safe_page_link
 
 apply_theme()
 
@@ -13,7 +13,7 @@ st.title("Sign out")
 
 if not is_authenticated():
     st.info("You are not signed in.")
-    st.page_link("pages/Auth/Login.py", label="Go to Login", icon="🔐")
+    safe_page_link("pages/Auth/Login.py", label="Go to Login", icon="🔐")
     st.stop()
 
 st.markdown(

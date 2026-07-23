@@ -821,9 +821,37 @@ def render_spec_section_header(
     )
 
 
+def nav_page_target(page: str):
+    """Resolve a script path to the registered st.Page when available (Cloud-safe)."""
+    pages = st.session_state.get("_nav_pages")
+    if isinstance(pages, dict) and page in pages:
+        return pages[page]
+    return page
+
+
+def safe_page_link(page: str, **kwargs) -> None:
+    """page_link that prefers navigation Page objects; falls back to a button.
+
+    Streamlit Cloud + st.navigation often raises StreamlitPageNotFoundError for
+    string paths like ``pages/Home.py`` even when the page exists in the sidebar.
+    """
+    target = nav_page_target(page)
+    try:
+        st.page_link(target, **kwargs)
+        return
+    except Exception:
+        pass
+    label = str(kwargs.get("label") or "Open")
+    icon = str(kwargs.get("icon") or "")
+    key = f"nav_fallback_{page}_{label}"
+    btn_label = f"{icon} {label}".strip() if icon else label
+    if st.button(btn_label, key=key, use_container_width=kwargs.get("use_container_width")):
+        st.switch_page(target)
+
+
 def render_back_to_home_link() -> None:
     """Sidebar-style escape hatch when users land on a sub-page and need Home."""
-    st.page_link("pages/Home.py", label="Back to Home", icon="🏠")
+    safe_page_link("pages/Home.py", label="Back to Home", icon="🏠")
 
 
 def render_active_project_banner(project_name: str) -> None:
@@ -877,7 +905,7 @@ def render_home_demo_link(*, enabled: bool = True) -> None:
     if not enabled:
         return
     st.markdown('<div class="home-demo-link">', unsafe_allow_html=True)
-    st.page_link(
+    safe_page_link(
         "pages/Demo.py",
         label="Watch the 8‑min Workflow Demo →",
         icon="🎬",
@@ -931,7 +959,7 @@ def render_home_empty_state() -> None:
     )
     _c1, _c2, _c3 = st.columns([1, 2, 1])
     with _c2:
-        st.page_link(
+        safe_page_link(
             "pages/Settings.py",
             label="Create your first project →",
             icon="➕",
@@ -994,7 +1022,7 @@ def render_home_action_card(
         "</div>",
         unsafe_allow_html=True,
     )
-    st.page_link(page, label=link_label, use_container_width=True)
+    safe_page_link(page, label=link_label, use_container_width=True)
 
 
 def render_home_api_status(*, banner_message: str | None) -> None:

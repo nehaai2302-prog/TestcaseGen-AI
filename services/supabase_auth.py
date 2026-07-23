@@ -190,5 +190,10 @@ def require_auth() -> None:
     if is_authenticated():
         return
     st.warning("Please sign in to continue.")
-    st.page_link("pages/Auth/Login.py", label="Go to Login", icon="🔐")
+    try:
+        from theme import safe_page_link
+
+        safe_page_link("pages/Auth/Login.py", label="Go to Login", icon="🔐")
+    except Exception:
+        st.page_link("pages/Auth/Login.py", label="Go to Login", icon="🔐")
     st.stop()

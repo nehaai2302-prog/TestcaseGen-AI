@@ -5,7 +5,7 @@ from __future__ import annotations
 import streamlit as st
 
 from services.supabase_auth import AuthError, is_authenticated, sign_in
-from theme import apply_theme
+from theme import apply_theme, safe_page_link
 
 apply_theme()
 
@@ -32,4 +32,4 @@ if submitted:
         except AuthError as e:
             st.error(f"Sign-in failed: {e}")
 
-st.page_link("pages/Auth/Signup.py", label="Create an account", icon="📝")
+safe_page_link("pages/Auth/Signup.py", label="Create an account", icon="📝")

@@ -18,6 +18,8 @@ from theme import (
     render_active_project_banner,
     render_back_to_home_link,
     render_gradient_metric,
+    nav_page_target,
+    safe_page_link,
 )
 
 apply_theme()
@@ -111,7 +113,7 @@ with st.expander(
         help="CSV/XLSX imports in the current filter — not AI-generated.",
     )
 
-st.page_link(
+safe_page_link(
     "pages/Library.py",
     label="View imported in Library →",
     icon="📚",
@@ -154,7 +156,7 @@ if generated_rows or unlinked_generated:
         cols[0].write(req_id)
         cols[1].write(str(count))
         cols[2].page_link(
-            "pages/Library.py",
+            nav_page_target("pages/Library.py"),
             label=f"View {req_id} in Library →",
             icon="📚",
             query_params=_library_params(req_id=req_id),
@@ -165,7 +167,7 @@ if generated_rows or unlinked_generated:
         cols[0].write("*(Unlinked / no requirement ID)*")
         cols[1].write(str(unlinked_generated))
         cols[2].page_link(
-            "pages/Library.py",
+            nav_page_target("pages/Library.py"),
             label="View unlinked in Library →",
             icon="📚",
             query_params=_library_params(unlinked=True),

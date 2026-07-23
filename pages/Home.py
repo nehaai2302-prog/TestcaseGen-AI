@@ -21,6 +21,8 @@ from theme import (
     render_home_empty_state,
     render_home_welcome,
     render_home_your_path,
+    nav_page_target,
+    safe_page_link,
 )
 
 
@@ -120,7 +122,7 @@ else:
             '<div class="home-project-helper-label">Need another project?</div>',
             unsafe_allow_html=True,
         )
-        st.page_link("pages/Settings.py", label="Manage in Settings →")
+        safe_page_link("pages/Settings.py", label="Manage in Settings →")
 
     step_active, step_done = _home_step_progress(
         repo, st.session_state.get("project_id")
@@ -163,8 +165,8 @@ else:
         unsafe_allow_html=True,
     )
     q1, q2, q3 = st.columns(3)
-    q1.page_link("pages/Library.py", label="Library", icon="📚")
-    q2.page_link("pages/Traceability.py", label="Traceability", icon="🔗")
-    q3.page_link("pages/Bugs.py", label="Bug reports", icon="🐛")
+    q1.page_link(nav_page_target("pages/Library.py"), label="Library", icon="📚")
+    q2.page_link(nav_page_target("pages/Traceability.py"), label="Traceability", icon="🔗")
+    q3.page_link(nav_page_target("pages/Bugs.py"), label="Bug reports", icon="🐛")
 
 render_home_api_status(banner_message=openai_banner_message)

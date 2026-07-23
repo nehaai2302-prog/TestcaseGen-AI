@@ -23,7 +23,7 @@ from services.bootstrap import get_repo
 from services.project_ui import active_project_name
 from services.supabase_auth import require_auth
 
-from theme import apply_theme, render_active_project_banner, render_back_to_home_link, render_gradient_metric
+from theme import apply_theme, render_active_project_banner, render_back_to_home_link, render_gradient_metric, safe_page_link
 
 
 
@@ -152,7 +152,7 @@ with c1:
         "purple",
         help="Cases created by the QAWeaver pipeline for this project.",
     )
-    st.page_link("pages/Library.py", label="View in Library →", icon="📚")
+    safe_page_link("pages/Library.py", label="View in Library →", icon="📚")
 
 with c2:
     render_gradient_metric(
@@ -169,7 +169,7 @@ with c3:
         "warm",
         help="All bug reports for this project (typically imported from CSV).",
     )
-    st.page_link("pages/Bugs.py", label="View all bug reports →", icon="🐛")
+    safe_page_link("pages/Bugs.py", label="View all bug reports →", icon="🐛")
 
 with c4:
     render_gradient_metric(
@@ -178,7 +178,7 @@ with c4:
         "teal",
         help=req_metric_help,
     )
-    st.page_link(
+    safe_page_link(
         "pages/Traceability.py",
         label="View traceability matrix →",
         icon="🔗",
