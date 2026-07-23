@@ -7,13 +7,12 @@ import streamlit as st
 from services.bootstrap import get_repo
 from services.project_ui import (
     MODULE_ALL,
-    MODULE_NONE,
     MODULE_NONE_SENTINEL,
     active_project_name,
     module_filter_options,
     resolve_module_filter,
-    test_cases_breakdown_help,
 )
+from services.supabase_auth import require_auth
 from theme import (
     apply_theme,
     render_active_project_banner,
@@ -22,10 +21,11 @@ from theme import (
 )
 
 apply_theme()
+require_auth()
 render_back_to_home_link()
 
 st.title("🔗 Requirements Traceability Matrix")
-st.caption("Requirements → test cases")
+st.caption("Requirements → Testcases")
 
 try:
     repo = get_repo()
@@ -59,6 +59,14 @@ mod_choice = st.selectbox(
 module_filter = resolve_module_filter(mod_choice)
 trace = repo.get_test_case_traceability(pid, module_filter=module_filter)
 
+# RTM focuses on generated coverage only
+generated_rows = [
+    row for row in trace["by_requirement"] if int(row.get("generated") or 0) > 0
+]
+requirements_covered = len(generated_rows)
+unlinked_generated = int(trace.get("unlinked_generated") or 0)
+imported_count = int(trace.get("imported") or 0)
+
 if module_filter is None:
     scope = "all modules in this project"
 elif module_filter == MODULE_NONE_SENTINEL:
@@ -66,36 +74,52 @@ elif module_filter == MODULE_NONE_SENTINEL:
 else:
     scope = f"module **{mod_choice}**"
 
-if trace["project_total"] and trace["total"] != trace["project_total"]:
-    st.caption(
-        f"Showing {trace['total']} of {trace['project_total']} test cases ({scope})."
-    )
-else:
-    st.caption(f"Showing test cases for {scope}.")
+st.caption(f"Generated coverage for {scope}.")
 
 m1, m2 = st.columns(2)
-_trace_req_help = (
-    "Distinct requirement IDs with at least one test case in the current module filter."
-)
-
 with m1:
     render_gradient_metric(
-        "Test cases",
-        trace["total"],
+        "Generated test cases",
+        trace["generated"],
         "purple",
-        help=test_cases_breakdown_help(trace),
+        help="Cases created by the QAWeaver pipeline in the current filter.",
     )
 with m2:
     render_gradient_metric(
         "Requirements covered",
-        trace["distinct_requirements"],
+        requirements_covered,
         "teal",
-        help=_trace_req_help,
+        help=(
+            "Distinct requirement IDs with at least one generated test case "
+            "in the current filter."
+        ),
     )
+
+with st.expander(
+    f"Project history · {imported_count} imported testcase"
+    f"{'' if imported_count == 1 else 's'}",
+    expanded=False,
+):
+    st.caption(
+        "Imported testcases are project history used for RAG during generation. "
+        "They are not part of this requirements → generated coverage matrix."
+    )
+    render_gradient_metric(
+        "Imported testcases (history)",
+        imported_count,
+        "indigo",
+        help="CSV/XLSX imports in the current filter — not AI-generated.",
+    )
+
+st.page_link(
+    "pages/Library.py",
+    label="View imported in Library →",
+    icon="📚",
+)
 
 st.subheader("Requirements → test cases")
 st.caption(
-    "Each row is a requirement ID with test coverage in the current filter. "
+    "Each row is a requirement ID with generated coverage in the current filter. "
     "Open Library to see matching cases."
 )
 
@@ -115,16 +139,18 @@ def _library_params(req_id: str | None = None, unlinked: bool = False) -> dict[s
     return params
 
 
-if trace["by_requirement"] or trace["unlinked"]:
-    header = st.columns([2, 1, 2])
+_COL = [2, 1, 2]
+
+if generated_rows or unlinked_generated:
+    header = st.columns(_COL)
     header[0].markdown("**Requirement ID**")
     header[1].markdown("**Test cases**")
     header[2].markdown("**Library**")
 
-    for row in trace["by_requirement"]:
+    for row in generated_rows:
         req_id = row["linked_requirement"]
-        count = row["test_case_count"]
-        cols = st.columns([2, 1, 2])
+        count = int(row.get("generated") or 0)
+        cols = st.columns(_COL)
         cols[0].write(req_id)
         cols[1].write(str(count))
         cols[2].page_link(
@@ -134,10 +160,10 @@ if trace["by_requirement"] or trace["unlinked"]:
             query_params=_library_params(req_id=req_id),
         )
 
-    if trace["unlinked"]:
-        cols = st.columns([2, 1, 2])
+    if unlinked_generated:
+        cols = st.columns(_COL)
         cols[0].write("*(Unlinked / no requirement ID)*")
-        cols[1].write(str(trace["unlinked"]))
+        cols[1].write(str(unlinked_generated))
         cols[2].page_link(
             "pages/Library.py",
             label="View unlinked in Library →",
@@ -146,6 +172,6 @@ if trace["by_requirement"] or trace["unlinked"]:
         )
 else:
     st.info(
-        "No test cases match this filter with a linked requirement. "
+        "No generated test cases match this filter with a linked requirement. "
         "Try **(All modules)** or generate tests from the Generate page."
     )

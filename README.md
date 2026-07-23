@@ -1,4 +1,4 @@
-# QAWeave AI
+# QAWeaver AI
 
 *Weaves traceable test cases from your requirements, informed by your past bugs and test history.*
 
@@ -6,7 +6,7 @@
 
 QA teams spend significant time turning requirement documents into manual test cases while keeping traceability to source specs and awareness of past defects. Requirements, bug history, and existing tests often live in separate tools, so new coverage can miss regressions that already appeared on the same screen, service, or functional area.
 
-**QAWeave AI** addresses that gap: upload a requirement document, optionally import project bugs and test cases, and run a **multi-agent pipeline** that produces structured, review-ready manual tests linked to requirement IDs. Retrieval-augmented generation (RAG) over **Supabase pgvector** surfaces relevant history before each requirement is written up, so generated cases can reflect real regression risk—not generic templates.
+**QAWeaver AI** addresses that gap: upload a requirement document, optionally import project bugs and test cases, and run a **multi-agent pipeline** that produces structured, review-ready manual tests linked to requirement IDs. Retrieval-augmented generation (RAG) over **Supabase pgvector** surfaces relevant history before each requirement is written up, so generated cases can reflect real regression risk—not generic templates.
 
 **How it works (summary):** documents are chunked and embedded at prepare time; **LangGraph** runs an Analyst step, scope-aware per-rule retrieval, parallel test generation, optional coverage review, deduplication, and persistence. **Streamlit** provides ingest, generation, semantic library search, a traceability matrix, and CSV/XLSX export. Optional **[LangSmith](https://smith.langchain.com)** tracing records each pipeline run for debugging and evaluation.
 
@@ -20,7 +20,7 @@ QA teams spend significant time turning requirement documents into manual test c
 |---|---|
 | **Situation** | QA maintains requirements, historical bugs, and test libraries; manual test design is repetitive and must stay traceable to specs. |
 | **Complication** | Writing cases from prose is slow; new features may not reuse lessons from prior bugs on the same checkout flow, API, or audit area. |
-| **Resolution** | QAWeave AI ingests requirements, retrieves scope-aware project history via RAG, and runs a bounded LangGraph workflow to generate linked test cases with coverage checks, dedup, and export. |
+| **Resolution** | QAWeaver AI ingests requirements, retrieves scope-aware project history via RAG, and runs a bounded LangGraph workflow to generate linked test cases with coverage checks, dedup, and export. |
 
 **SMART objectives (demo scope)**
 
@@ -103,8 +103,13 @@ Open the URL shown in the terminal (usually `http://localhost:8501`).
 | 2 | [`sql/migrations/002_bug_number.sql`](sql/migrations/002_bug_number.sql) | External bug IDs (`bug_number`) |
 | 3 | [`sql/migrations/003_testcase_id.sql`](sql/migrations/003_testcase_id.sql) | External test case IDs (`testcase_id`) |
 | 4 | [`sql/migrations/004_requirement_id.sql`](sql/migrations/004_requirement_id.sql) | Source requirement IDs on chunks + updated RPC |
+| 5 | [`sql/migrations/005_projects_name_unique.sql`](sql/migrations/005_projects_name_unique.sql) | Case-insensitive unique project names |
+| 6 | [`sql/migrations/006_add_users.sql`](sql/migrations/006_add_users.sql) | `users` table + `projects.user_id` |
+| 7 | [`sql/migrations/007_add_user_to_projects.sql`](sql/migrations/007_add_user_to_projects.sql) | Per-user project names + owner indexes |
+| 8 | [`sql/migrations/008_rls_policies.sql`](sql/migrations/008_rls_policies.sql) | Row Level Security for multi-tenant isolation |
 
-3. In **Project Settings → API**, copy the project URL and **service role** key into `.env` (see [Environment variables](#environment-variables)).
+3. In **Project Settings → API**, copy the project URL, **anon public** key, and **service role** key into `.env` (see [Environment variables](#environment-variables)).
+4. In **Authentication → Providers**, enable **Email** (disable email confirmation for local dev if you want instant signup without inbox checks).
 
 **Commit `sql/migrations/` to GitHub** — these are schema scripts, not secrets. Each reviewer uses their own Supabase project and keys.
 
@@ -165,14 +170,17 @@ Copy [`.env.example`](.env.example) to `.env` and fill in values. **Never commit
 |----------|----------|-------------|
 | `OPENAI_API_KEY` | yes | OpenAI API key |
 | `SUPABASE_URL` | yes | Supabase project URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | yes | Service role key (server-side only; Streamlit backend) |
-| `OPENAI_CHAT_MODEL` | no | Default `gpt-4o-mini` |
+| `SUPABASE_ANON_KEY` | yes | Anon public key (user-scoped DB access with RLS) |
+| `SUPABASE_SERVICE_ROLE_KEY` | yes | Service role key (server-side only; demo video signed URLs) |
+| `OPENAI_CHAT_MODEL` | no | Default/fallback chat model |
+| `OPENAI_GENERATION_MODEL` | no | Optional stronger model for testcase generation only; falls back to `OPENAI_CHAT_MODEL` |
 | `OPENAI_EMBEDDING_MODEL` | no | Default `text-embedding-3-small` (1536 dims) |
 | `MAX_COVERAGE_REVIEW_ROUNDS` | no | Default `0` |
 | `GEN_RULE_BATCH_SIZE` | no | Default `8` |
 | `GEN_PARALLEL_WORKERS` | no | Default `3` |
 | `RAG_LINK_MIN_SIMILARITY` | no | Default `0.55` |
 | `ANALYST_MAX_RULES` | no | Default `20` |
+| `OPENAI_ANALYST_MODEL` | no | Optional analyst-only model override |
 | `RETRIEVAL_TOP_K` | no | Default `12` |
 | `RETRIEVAL_TOP_K_PER_RULE` | no | Default `4` |
 | `RETRIEVAL_MATCH_THRESHOLD` | no | Default `0.15` |
@@ -211,15 +219,16 @@ Leave tracing unset or `LANGCHAIN_TRACING_V2=false` if you do not need observabi
 
 ## Usage flow
 
-1. **Home:** open the app; use the sidebar to navigate.
-2. **Settings:** create a project (sets active `project_id` in session).
-3. **Import:** upload `sample_data/sample_bug_reports.csv` and `sample_data/sample_test_cases.csv` (or your own — see Import page help).
-4. **Generate:** upload a requirement file (PDF/DOCX/TXT), **Prepare requirements**, then **Generate test cases**. (With [LangSmith](#langsmith-optional--llm-run-tracing) enabled, inspect the same run in the LangSmith UI.)
+1. **Sign up / Login:** create an account or sign in (sidebar **Login** when signed out).
+2. **Home:** open the app; use the sidebar to navigate.
+3. **Settings:** create a project (sets active `project_id` in session).
+4. **Import:** upload `sample_data/sample_bug_reports.csv` and `sample_data/sample_test_cases.csv` (or your own — see Import page help).
+5. **Generate:** upload a requirement file (PDF/DOCX/TXT), **Prepare requirements**, then **Generate test cases**. (With [LangSmith](#langsmith-optional--llm-run-tracing) enabled, inspect the same run in the LangSmith UI.)
 
 **Requirement ID parsing:** Supports `FR-2.4:` on one line and `FR-2.4` on its own line with text below. If layout looks ambiguous (e.g. duplicate `FR-2-2` suffixes), Step 2 runs the Analyst LLM once (~20–45s) to repair IDs. Clean docs skip that extra call.
-5. **Library:** semantic search, filters, export CSV or Excel.
-6. **Traceability matrix:** requirements → linked test cases (optional module filter). This is **QA traceability**, separate from LangSmith **LLM tracing**.
-7. **Bug reports** / **Dashboard:** browse imported bugs and project metrics.
+6. **Library:** semantic search, filters, export CSV or Excel.
+7. **Traceability matrix:** requirements → linked test cases (optional module filter). This is **QA traceability**, separate from LangSmith **LLM tracing**.
+8. **Bug reports** / **Dashboard:** browse imported bugs and project metrics.
 
 Sample requirement text: [`sample_data/sample_requirements.txt`](sample_data/sample_requirements.txt).
 
@@ -262,14 +271,14 @@ See [`docs/VERIFICATION.md`](docs/VERIFICATION.md) for a lightweight gold-style 
 
 Record a walkthrough: create project → import CSVs → ingest requirements → run pipeline → library search → traceability → export.
 
-Optional in-app playback: upload `qaweave-demo.mp4` to a **private** Supabase Storage bucket and set `DEMO_VIDEO_BUCKET`, `DEMO_VIDEO_PATH`, and `DEMO_VIDEO_SIGNED_URL_TTL` in `.env` / Streamlit secrets. Use the **Demo** nav page (or the link on Home) for the **Workflow Demo** player; **Open video in new tab** uses a signed URL refreshed on each load.
+Optional in-app playback: upload `QAWeaver-demo.mp4` to a **private** Supabase Storage bucket and set `DEMO_VIDEO_BUCKET`, `DEMO_VIDEO_PATH`, and `DEMO_VIDEO_SIGNED_URL_TTL` in `.env` / Streamlit secrets. Use the **Demo** nav page (or the link on Home) for the **Workflow Demo** player; **Open video in new tab** uses a signed URL refreshed on each load.
 
 ## Project layout
 
 | Path | Purpose |
 |------|---------|
 | `app.py` | Streamlit navigation entrypoint |
-| `Home.py` | Home + project selection |
+| `pages/Home.py` | Home + project selection |
 | `pages/Demo.py` | Workflow Demo video (signed URL from Storage) |
 | `pages/Dashboard.py` | Project metrics |
 | `pages/Generate.py` | Requirement ingest + LangGraph pipeline |

@@ -11,6 +11,7 @@ from services.bootstrap import get_repo
 from services.openai_errors import resolve_openai_banner_message
 from services.project_ui import active_project_name
 from services.session_project import set_active_project
+from services.supabase_auth import get_welcome_first_name, require_auth
 from theme import (
     apply_theme,
     render_active_project_banner,
@@ -51,11 +52,12 @@ def _home_step_progress(repo: Any, project_id: str | None) -> tuple[int | None, 
     return (3 if has_context else 2), done
 
 
-load_dotenv()
+load_dotenv(override=True)
 
 apply_theme()
+require_auth()
 
-st.title("🧪 QAWeave AI")
+st.title("🧪 QAWeaver AI")
 st.caption(
     "Weaves traceable test cases from your requirements, "
     "informed by your past bugs and test history."
@@ -81,8 +83,10 @@ if not projects:
     render_home_empty_state()
     render_home_your_path(active_step=1, completed_steps=set())
 else:
+    first_name = get_welcome_first_name()
+    welcome = f"Welcome back, {first_name}" if first_name else "Welcome back"
     render_home_welcome(
-        "Welcome back",
+        welcome,
         subtitle="Glad to see you again. Let's keep building up Quality!",
     )
     render_home_demo_link(enabled=bool(demo_video_url))

@@ -7,7 +7,22 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from agent.nodes._batch_generate import generate_combined_batch
+from agent.ambiguity import generatable_rules, mark_rule_statuses
+from agent.contradiction_scan import merge_contradictions, scan_spec_contradictions
 from agent.state import TestGenState
+
+
+def _rules_for_generation(
+    state: TestGenState,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    all_rules = list(state.get("atomic_rules") or [])
+    chunks = list(state.get("requirement_chunks") or [])
+    contradictions = merge_contradictions(
+        list(state.get("contradictions") or []),
+        scan_spec_contradictions(all_rules, requirement_chunks=chunks),
+    )
+    marked_rules = mark_rule_statuses(all_rules, contradictions)
+    return generatable_rules(marked_rules), contradictions, marked_rules
 
 
 def _batch_size() -> int:
@@ -41,12 +56,14 @@ def _run_batches_parallel(
 
 
 def generate_cases(state: TestGenState) -> dict[str, Any]:
-    rules = list(state.get("atomic_rules") or [])
+    rules, contradictions, marked_rules = _rules_for_generation(state)
     if not rules:
         return {
             "positive_cases": [],
             "destructive_cases": [],
             "generated_cases": [],
+            "contradictions": contradictions,
+            "atomic_rules": marked_rules,
             "current_step": "generate_cases",
         }
 
@@ -65,6 +82,8 @@ def generate_cases(state: TestGenState) -> dict[str, Any]:
             "destructive_cases": [
                 c for c in merged if c.get("test_type") in ("negative", "boundary", "edge")
             ],
+            "contradictions": contradictions,
+            "atomic_rules": marked_rules,
             "current_step": "generate_cases",
         }
 
@@ -79,5 +98,7 @@ def generate_cases(state: TestGenState) -> dict[str, Any]:
         "destructive_cases": [
             c for c in all_cases if c.get("test_type") in ("negative", "boundary", "edge")
         ],
+        "contradictions": contradictions,
+        "atomic_rules": marked_rules,
         "current_step": "generate_cases",
     }

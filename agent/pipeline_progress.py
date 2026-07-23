@@ -10,9 +10,11 @@ from typing import Any
 from agent.graph import (
     PIPELINE_NEXT_STEP,
     PIPELINE_STEP_COUNT,
+    REGEN_PIPELINE_STEP_COUNT,
     get_step_hint,
     get_step_label,
     run_generation_stream,
+    run_regen_stream,
 )
 from agent.state import TestGenState
 from services.supabase_repo import SupabaseRepo
@@ -24,6 +26,7 @@ def run_pipeline_with_live_progress(
     *,
     on_tick: Callable[[dict[str, Any]], None],
     poll_interval: float = 0.8,
+    regen: bool = False,
 ) -> TestGenState:
     """
     Run generation on a worker thread; call on_tick(live_state) on the **main**
@@ -32,14 +35,16 @@ def run_pipeline_with_live_progress(
 
     The worker only updates an in-memory `live` dict; all UI must happen in on_tick.
     """
+    step_count = REGEN_PIPELINE_STEP_COUNT if regen else PIPELINE_STEP_COUNT
     live: dict[str, Any] = {
-        "running_step": "retrieve_history",
+        "running_step": "generate_cases" if regen else "retrieve_history",
         "completed_steps": [],
         "step_index": 0,
         "started_at": time.time(),
         "done": False,
         "error": None,
         "final": None,
+        "step_count": step_count,
     }
     lock = threading.Lock()
 
@@ -54,7 +59,8 @@ def run_pipeline_with_live_progress(
 
     def _worker() -> None:
         try:
-            result = run_generation_stream(repo, initial, on_step=_on_step)
+            runner = run_regen_stream if regen else run_generation_stream
+            result = runner(repo, initial, on_step=_on_step)
             with lock:
                 live["final"] = result
                 live["running_step"] = None
@@ -90,21 +96,22 @@ def format_live_progress(snapshot: dict[str, Any]) -> tuple[float, str]:
     completed = int(snapshot.get("step_index") or 0)
     running = snapshot.get("running_step")
     elapsed = int(time.time() - float(snapshot.get("started_at") or time.time()))
+    step_count = int(snapshot.get("step_count") or PIPELINE_STEP_COUNT)
 
     if running:
         display_index = completed + 1
         label = get_step_label(running)
         hint = get_step_hint(running)
-        fraction = min(completed / PIPELINE_STEP_COUNT, 0.99)
+        fraction = min(completed / step_count, 0.99)
         text = (
-            f"Step {display_index}/{PIPELINE_STEP_COUNT}: {label} "
+            f"Step {display_index}/{step_count}: {label} "
             f"- {elapsed}s elapsed. {hint}"
         )
         return fraction, text
 
-    if completed >= PIPELINE_STEP_COUNT:
+    if completed >= step_count:
         return 1.0, "Pipeline complete."
-    fraction = min(completed / PIPELINE_STEP_COUNT, 0.99)
+    fraction = min(completed / step_count, 0.99)
     return fraction, f"Finishing… ({elapsed}s elapsed)"
 
 

@@ -9,12 +9,17 @@ from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
+from agent.ambiguity import mark_rule_statuses, summarize_contradictions
+from agent.clarifying_questions import build_clarifying_questions
+from agent.contradiction_scan import merge_contradictions, scan_spec_contradictions
 from agent.formatting import chunk_lines
-from agent.llm import get_analyst_chat_model, get_model_name
+from agent.llm import get_analyst_chat_model, get_analyst_model_name
 from agent.models import AnalystResult
 from agent.prompts import ANALYST_SYSTEM, ANALYST_USER, REQUIREMENT_CHUNKS_BLOCK
 from agent.state import TestGenState
+from agent.execution_profile import infer_execution_profile, normalize_execution_profile
 from services.chunking import RequirementSplit, structured_splits_low_confidence
+from services.constraint_parser import extract_constraints
 
 _SYNTHETIC_REQ_RE = re.compile(r"^REQ-\d{2}$", re.IGNORECASE)
 
@@ -115,6 +120,7 @@ def _requirements_from_structured_chunks(
         if not req_id:
             continue
         text = chunk.get("chunk_text") or ""
+        constraints = extract_constraints(text)
         requirements.append(
             {
                 "rule_id": req_id,
@@ -124,7 +130,10 @@ def _requirements_from_structured_chunks(
                 "source_requirement_chunk_ids": [str(chunk.get("id"))],
                 "module": chunk.get("module") or module_hint,
                 "screen": "General",
+                "constraints": constraints,
+                "execution_profile": infer_execution_profile(text, constraints),
                 "source": "document_requirement",
+                "status": "active",
                 "chunk_index": chunk.get("chunk_index", i),
             }
         )
@@ -136,6 +145,8 @@ def analyze_requirements(state: TestGenState) -> dict[str, Any]:
     if not chunks:
         return {
             "atomic_rules": [],
+            "contradictions": [],
+            "clarifying_questions": [],
             "errors": (state.get("errors") or []) + ["No requirement chunks to analyze"],
             "current_step": "analyze_requirements",
         }
@@ -144,15 +155,33 @@ def analyze_requirements(state: TestGenState) -> dict[str, Any]:
         chunks, state.get("module_hint") or None
     )
     if structured:
+        contradictions = scan_spec_contradictions(structured, requirement_chunks=chunks)
+        structured = mark_rule_statuses(structured, contradictions)
+        clarifying = build_clarifying_questions(structured, contradictions)
+        reasoning = (
+            "Structured requirement IDs were detected with high confidence; "
+            "source IDs were preserved without an LLM pass."
+        )
+        contradiction_note = summarize_contradictions(contradictions)
+        if contradiction_note:
+            reasoning = (
+                f"Analyst flagged {len(contradictions)} contradiction(s) requiring clarification "
+                f"before generation: {contradiction_note}. "
+                + reasoning
+            ).strip()
+        if clarifying:
+            reasoning = (
+                reasoning
+                + f" Open questions for the spec author: {len(clarifying)}."
+            ).strip()
         return {
             "atomic_rules": structured,
             "requirements": structured,
-            "reasoning": (
-                "Structured requirement IDs were detected with high confidence; "
-                "source IDs were preserved without an LLM pass."
-            ),
+            "contradictions": contradictions,
+            "clarifying_questions": clarifying,
+            "reasoning": reasoning,
             "current_step": "analyze_requirements",
-            "model_name": get_model_name(),
+            "model_name": get_analyst_model_name(),
         }
 
     max_rules = int(os.environ.get("ANALYST_MAX_RULES", "20"))
@@ -171,6 +200,8 @@ def analyze_requirements(state: TestGenState) -> dict[str, Any]:
     )
 
     rules = [r.model_dump() for r in result.atomic_rules][:max_rules]
+    contradictions = [c.model_dump() for c in result.contradictions]
+    llm_questions = [q.model_dump() for q in result.clarifying_questions]
     for i, rule in enumerate(rules):
         if not rule.get("rule_id"):
             rule["rule_id"] = f"REQ-{i + 1:02d}"
@@ -179,10 +210,39 @@ def analyze_requirements(state: TestGenState) -> dict[str, Any]:
         rule["requirement_id"] = rule.get("requirement_id") or rule["rule_id"]
         if not (rule.get("screen") or "").strip():
             rule["screen"] = "General"
+        if not rule.get("constraints"):
+            rule["constraints"] = extract_constraints(rule.get("detail") or rule.get("summary") or "")
+        rule_text = f"{rule.get('summary') or ''} {rule.get('detail') or ''}"
+        rule["execution_profile"] = normalize_execution_profile(
+            rule.get("execution_profile"),
+            rule_text,
+            rule.get("constraints") or [],
+        )
 
     rules = ensure_unique_rule_ids(rules, chunks)
+    rules = mark_rule_statuses(rules, contradictions)
+    llm_contradictions = scan_spec_contradictions(rules, requirement_chunks=chunks)
+    contradictions = merge_contradictions(contradictions, llm_contradictions)
+    rules = mark_rule_statuses(rules, contradictions)
+    clarifying = build_clarifying_questions(
+        rules,
+        contradictions,
+        llm_questions=llm_questions,
+    )
 
     reasoning = result.reasoning or ""
+    contradiction_note = summarize_contradictions(contradictions)
+    if contradiction_note:
+        reasoning = (
+            f"Analyst flagged {len(contradictions)} contradiction(s) requiring clarification "
+            f"before generation: {contradiction_note}. "
+            + reasoning
+        ).strip()
+    if clarifying:
+        reasoning = (
+            reasoning
+            + f" Open questions for the spec author: {len(clarifying)}."
+        ).strip()
     if not all(c.get("is_synthetic_requirement") for c in chunks):
         reasoning = (
             "Automatic ID detection looked ambiguous; the Analyst LLM re-read the "
@@ -193,7 +253,9 @@ def analyze_requirements(state: TestGenState) -> dict[str, Any]:
     return {
         "atomic_rules": rules,
         "requirements": rules,
+        "contradictions": contradictions,
+        "clarifying_questions": clarifying,
         "reasoning": reasoning,
         "current_step": "analyze_requirements",
-        "model_name": get_model_name(),
+        "model_name": get_analyst_model_name(),
     }

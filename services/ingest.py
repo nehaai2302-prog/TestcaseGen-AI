@@ -11,6 +11,7 @@ import pandas as pd
 from services.chunking import ParseQuality, assess_parse_quality, split_requirements
 from services.document_parser import parse_uploaded_file
 from services.embeddings import embed_texts, get_embeddings_model
+from services.srs_change import diff_requirement_documents
 from services.supabase_repo import SupabaseRepo, content_hash
 
 ImportMode = Literal["flat", "grouped"]
@@ -52,13 +53,15 @@ def ingest_requirement_document(
     filename: str,
     file_bytes: bytes,
     module: str | None = None,
-) -> tuple[list[dict[str, Any]], ParseQuality]:
-    """Parse, split, embed, replace requirements; return rows and parse quality."""
+) -> tuple[list[dict[str, Any]], ParseQuality, dict[str, Any]]:
+    """Parse, split, embed, replace requirements; return rows, quality, SRS change report."""
     text = parse_uploaded_file(filename, file_bytes)
     requirements = split_requirements(text)
     if not requirements:
         raise ValueError("No text extracted from document")
     parse_quality = assess_parse_quality(requirements)
+
+    previous_rows = repo.list_requirements_for_document(project_id, filename)
 
     repo.delete_requirements_for_document(project_id, filename)
     emb = get_embeddings_model()
@@ -80,7 +83,12 @@ def ingest_requirement_document(
             }
         )
     inserted = repo.insert_requirement_chunks(project_id, filename, rows)
-    return inserted, parse_quality
+    change_report = diff_requirement_documents(
+        previous_rows,
+        inserted or rows,
+        document_name=filename,
+    )
+    return inserted, parse_quality, change_report
 
 
 def _normalize_header(name: str) -> str:

@@ -12,6 +12,7 @@ GENERATE_WORKFLOW_KEYS = (
     "req_chunks",
     "req_doc_name",
     "req_parse_quality",
+    "srs_change_report",
     "last_run",
 )
 

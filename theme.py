@@ -37,6 +37,40 @@ div[data-testid="stExpander"] {
 }
 div[data-testid="stExpander"] summary { font-weight: 600; }
 
+/* Run details — accented expanders */
+[class*="st-key-gen_details_req_list"] div[data-testid="stExpander"],
+[class*="st-key-gen_details_reasoning"] div[data-testid="stExpander"] {
+  background: rgba(26, 31, 61, 0.72) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 12px !important;
+  overflow: hidden;
+}
+[class*="st-key-gen_details_req_list"] div[data-testid="stExpander"] {
+  border-top: 3px solid #7c5cff !important;
+}
+[class*="st-key-gen_details_reasoning"] div[data-testid="stExpander"] {
+  border-top: 3px solid #14b8a6 !important;
+}
+/* Library — linked requirement preview */
+[class*="st-key-lib_req_preview"] div[data-testid="stExpander"] {
+  background: rgba(26, 31, 61, 0.72) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-top: 3px solid #7c5cff !important;
+  border-radius: 12px !important;
+  overflow: hidden;
+}
+.gen-req-preview__meta {
+  font-size: 0.8rem;
+  color: rgba(242, 243, 251, 0.55);
+  margin: 0 0 0.55rem 0;
+}
+.gen-req-preview__body {
+  font-size: 0.92rem;
+  color: rgba(242, 243, 251, 0.9);
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
 div[data-testid="stMetric"] {
   border-radius: 12px;
   padding: 12px 16px;
@@ -552,6 +586,189 @@ div[data-testid="stHorizontalBlock"]:has([class*="st-key-demo_chapter_jump"])
 .tc-precond { color: #FBBF24; }
 .tc-steps   { color: #7DD3FC; }
 .tc-expect  { color: #4ADE80; }
+
+/* ---------- Generate setup panels (Option 1+3) ---------- */
+[class*="st-key-generate_panel_req"],
+[class*="st-key-generate_panel_set"] {
+  background: rgba(26, 31, 61, 0.94) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 14px !important;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.32) !important;
+  overflow: hidden !important;
+}
+[class*="st-key-generate_panel_req"] {
+  border-top: 3px solid #7c5cff !important;
+}
+[class*="st-key-generate_panel_set"] {
+  border-top: 3px solid #14b8a6 !important;
+}
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.gen-setup-marker--req) {
+  border-top: 3px solid #7c5cff !important;
+  background: rgba(26, 31, 61, 0.94) !important;
+}
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.gen-setup-marker--set) {
+  border-top: 3px solid #14b8a6 !important;
+  background: rgba(26, 31, 61, 0.94) !important;
+}
+/* Accent flush to the padded card top */
+.gen-setup-marker {
+  margin: -1rem -1rem 0.65rem -1rem;
+}
+.gen-setup-accent {
+  height: 3px;
+  width: 100%;
+  display: block;
+}
+.gen-setup-accent--req {
+  background: linear-gradient(90deg, #7c5cff 0%, #a78bfa 70%, rgba(124, 92, 255, 0.25) 100%);
+}
+.gen-setup-accent--set {
+  background: linear-gradient(90deg, #14b8a6 0%, #2dd4bf 70%, rgba(20, 184, 166, 0.25) 100%);
+}
+.gen-setup-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #f2f3fb;
+  letter-spacing: 0.01em;
+  margin: 0;
+  padding: 0.8rem 1rem 0.15rem 1rem;
+  line-height: 1.3;
+}
+.gen-field-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #c4b5fd;
+  margin: 0.55rem 0 0.35rem 0;
+  line-height: 1.2;
+}
+.gen-field-hint {
+  font-size: 0.78rem;
+  color: rgba(242, 243, 251, 0.45);
+  margin: 0.2rem 0 0.65rem 0;
+  line-height: 1.35;
+}
+.gen-estimate-chip {
+  display: inline-block;
+  margin: 0.15rem 0 0.75rem 0;
+  padding: 0.28rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #a5f3fc;
+  background: rgba(20, 184, 166, 0.14);
+  border: 1px solid rgba(45, 212, 191, 0.35);
+}
+.gen-setup-foot {
+  font-size: 0.78rem;
+  color: rgba(242, 243, 251, 0.42);
+  margin-top: 0.55rem;
+  line-height: 1.35;
+}
+.gen-drop-hint {
+  font-size: 0.82rem;
+  color: rgba(242, 243, 251, 0.58);
+  margin: 0 0 0.4rem 0;
+  line-height: 1.35;
+}
+.gen-drop-hint strong {
+  color: #e9d5ff;
+  font-weight: 600;
+}
+/* Generate results tabs — larger, more prominent */
+[data-testid="stTabs"] [data-baseweb="tab-list"] {
+  gap: 0.35rem !important;
+  margin-bottom: 0.75rem !important;
+}
+[data-testid="stTabs"] button[data-baseweb="tab"] {
+  font-size: 1.05rem !important;
+  font-weight: 700 !important;
+  padding: 0.7rem 1.05rem !important;
+  color: rgba(242, 243, 251, 0.62) !important;
+}
+[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] {
+  color: #f2f3fb !important;
+}
+[data-testid="stTabs"] [data-baseweb="tab-highlight"] {
+  height: 3px !important;
+  background-color: #7c5cff !important;
+}
+[data-testid="stTabs"] [data-baseweb="tab-border"] {
+  border-bottom-color: rgba(255, 255, 255, 0.12) !important;
+}
+/* Spec Issues tab — section headers (Option A accent strips) */
+.gen-spec-section {
+  margin: 0.35rem 0 0.85rem 0;
+  padding: 0.7rem 0.9rem 0.75rem;
+  border-radius: 12px;
+  background: rgba(26, 31, 61, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.gen-spec-section--conflict {
+  border-top: 3px solid #f59e0b;
+}
+.gen-spec-section--questions {
+  border-top: 3px solid #14b8a6;
+  margin-top: 1.15rem;
+}
+.gen-spec-section__eyebrow {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 0 0 0.2rem 0;
+  line-height: 1.2;
+}
+.gen-spec-section--conflict .gen-spec-section__eyebrow {
+  color: #fbbf24;
+}
+.gen-spec-section--questions .gen-spec-section__eyebrow {
+  color: #5eead4;
+}
+.gen-spec-section__title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #f2f3fb;
+  margin: 0 0 0.25rem 0;
+  line-height: 1.3;
+}
+.gen-spec-section__blurb {
+  font-size: 0.82rem;
+  color: rgba(242, 243, 251, 0.55);
+  margin: 0;
+  line-height: 1.4;
+}
+/* Visible field borders inside setup panels */
+[class*="st-key-generate_panel_"] div[data-testid="stTextInput"] input,
+[class*="st-key-generate_panel_"] div[data-baseweb="input"],
+[class*="st-key-generate_panel_"] div[data-baseweb="select"] > div {
+  border: 1px solid rgba(184, 163, 255, 0.5) !important;
+  background-color: rgba(15, 18, 38, 0.72) !important;
+  border-radius: 10px !important;
+  box-shadow: none !important;
+}
+[class*="st-key-generate_panel_"] div[data-testid="stTextInput"] input:focus,
+[class*="st-key-generate_panel_"] div[data-baseweb="input"]:focus-within,
+[class*="st-key-generate_panel_"] div[data-baseweb="select"] > div:focus-within {
+  border-color: rgba(167, 139, 250, 0.95) !important;
+  box-shadow: 0 0 0 1px rgba(167, 139, 250, 0.35) !important;
+}
+/* Drag-and-drop zone — keep Streamlit's native Upload layout */
+[class*="st-key-generate_panel_req"] [data-testid="stFileUploaderDropzone"],
+[class*="st-key-generate_req_upload"] [data-testid="stFileUploaderDropzone"] {
+  border: 1.5px dashed rgba(196, 181, 253, 0.55) !important;
+  border-radius: 12px !important;
+  background: rgba(15, 18, 38, 0.5) !important;
+  padding: 0.9rem 1rem !important;
+  min-height: 4.75rem !important;
+}
+[class*="st-key-generate_panel_req"] [data-testid="stFileUploaderDropzone"]:hover,
+[class*="st-key-generate_req_upload"] [data-testid="stFileUploaderDropzone"]:hover {
+  border-color: rgba(167, 139, 250, 0.9) !important;
+  background: rgba(26, 31, 61, 0.72) !important;
+}
 </style>
 """
 
@@ -561,9 +778,52 @@ def apply_theme() -> None:
     st.markdown(_AURORA_CSS, unsafe_allow_html=True)
 
 
+def render_generate_field_label(text: str) -> None:
+    """Uppercase micro-label above a Generate setup control."""
+    safe = html.escape(text)
+    st.markdown(f'<div class="gen-field-label">{safe}</div>', unsafe_allow_html=True)
+
+
+def render_generate_panel_title(text: str, *, kind: str) -> None:
+    """Panel title with HTML accent bar flush to the card top edge."""
+    safe = html.escape(text)
+    marker = "gen-setup-marker--req" if kind == "req" else "gen-setup-marker--set"
+    accent = "gen-setup-accent--req" if kind == "req" else "gen-setup-accent--set"
+    st.markdown(
+        f'<div class="gen-setup-marker {marker}">'
+        f'<div class="gen-setup-accent {accent}" aria-hidden="true"></div>'
+        f'<div class="gen-setup-title">{safe}</div>'
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_spec_section_header(
+    title: str,
+    *,
+    kind: str,
+    count: int,
+    blurb: str,
+) -> None:
+    """Accent-strip header for Spec Issues sections (conflict vs questions)."""
+    variant = "conflict" if kind == "conflict" else "questions"
+    eyebrow = "Hard conflicts — generation blocked" if kind == "conflict" else (
+        "Open questions — for the spec author"
+    )
+    st.markdown(
+        f'<div class="gen-spec-section gen-spec-section--{variant}">'
+        f'<div class="gen-spec-section__eyebrow">{html.escape(eyebrow)}</div>'
+        f'<div class="gen-spec-section__title">'
+        f"{html.escape(title)} ({count})</div>"
+        f'<p class="gen-spec-section__blurb">{html.escape(blurb)}</p>'
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+
 def render_back_to_home_link() -> None:
     """Sidebar-style escape hatch when users land on a sub-page and need Home."""
-    st.page_link("Home.py", label="Back to Home", icon="🏠")
+    st.page_link("pages/Home.py", label="Back to Home", icon="🏠")
 
 
 def render_active_project_banner(project_name: str) -> None:
@@ -868,6 +1128,51 @@ def render_library_case_detail(case: dict[str, Any]) -> None:
     if case.get("_similarity") is not None:
         parts.append(f"**Search similarity:** {float(case['_similarity']):.2f}")
     st.caption(" · ".join(parts))
+
+
+def render_library_requirement_preview(
+    requirement_id: str,
+    chunks: list[dict[str, Any]],
+) -> None:
+    """Expandable requirement text for a Library test case (project DB lookup)."""
+    rid = (requirement_id or "").strip()
+    if not rid:
+        return
+    with st.container(key="lib_req_preview"):
+        if not chunks:
+            with st.expander(f"Requirement {rid}", expanded=False):
+                st.caption(
+                    "No requirement text found in this project for this ID "
+                    "(it may have been removed when the SRS was re-prepared)."
+                )
+            return
+
+        doc = str(chunks[0].get("document_name") or "").strip()
+        module = str(chunks[0].get("module") or "").strip()
+        meta_bits = []
+        if doc:
+            meta_bits.append(f"Document: {html.escape(doc)}")
+        if module:
+            meta_bits.append(f"Module: {html.escape(module)}")
+        meta_html = (
+            f'<p class="gen-req-preview__meta">{" · ".join(meta_bits)}</p>'
+            if meta_bits
+            else ""
+        )
+        bodies = []
+        for ch in chunks:
+            text = str(ch.get("chunk_text") or "").strip()
+            if text:
+                bodies.append(html.escape(text))
+        body_html = (
+            '<hr style="border-color:rgba(255,255,255,0.08);margin:0.6rem 0;" />'.join(
+                f'<div class="gen-req-preview__body">{b}</div>' for b in bodies
+            )
+            or '<div class="gen-req-preview__body">—</div>'
+        )
+
+        with st.expander(f"Requirement {rid} — show text", expanded=False):
+            st.markdown(meta_html + body_html, unsafe_allow_html=True)
 
 
 def _severity_chip_class(severity: str) -> str:

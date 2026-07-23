@@ -1,4 +1,4 @@
-# Sample requirements — QAWeave AI demo
+# Sample requirements — QAWeaver AI demo
 
 ## Authentication
 Users authenticate with email and password. Sessions expire after 30 minutes of inactivity. SSO users must refresh tokens silently; if refresh fails, show a friendly error and offer re-login.

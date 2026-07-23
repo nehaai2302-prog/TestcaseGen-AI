@@ -86,7 +86,18 @@ def persist(state: TestGenState, repo: SupabaseRepo) -> dict[str, Any]:
     project_id = state["project_id"]
     doc_name = state.get("document_name") or ""
     counters = _existing_case_counters(repo, project_id)
-    validated = _assign_testcase_ids(list(state.get("validated_cases") or []), counters)
+    all_validated = list(state.get("validated_cases") or [])
+    # Regen: only insert newly accepted cases (already-persisted keep their IDs).
+    to_insert = [
+        c for c in all_validated if not c.get("_already_persisted")
+    ] if state.get("regen_mode") else all_validated
+    validated = _assign_testcase_ids(to_insert, counters)
+    # Preserve prior cases in state for UI; assign IDs only to new ones above.
+    if state.get("regen_mode"):
+        prior = [c for c in all_validated if c.get("_already_persisted")]
+        validated_for_state = prior + validated
+    else:
+        validated_for_state = validated
     dups = _assign_testcase_ids(list(state.get("duplicates") or []), counters)
 
     emb_model = get_embeddings_model()
@@ -165,6 +176,16 @@ def persist(state: TestGenState, repo: SupabaseRepo) -> dict[str, Any]:
 
     rag = state.get("rag_stats") or {}
     model_note = state.get("model_name") or ""
+    dedup_stats = state.get("batch_dedup_stats") or {}
+    if dedup_stats:
+        model_note = (
+            f"{model_note}; dedup_kept={dedup_stats.get('kept', 0)}"
+            f"; batch_title={dedup_stats.get('removed_title', 0)}"
+            f"; batch_verbatim={dedup_stats.get('removed_verbatim', 0)}"
+            f"; batch_cross_req={dedup_stats.get('removed_cross_req', 0)}"
+            f"; batch_semantic={dedup_stats.get('removed_semantic', 0)}"
+            f"; library={dedup_stats.get('removed_library', 0)}"
+        ).strip("; ")
     if rag.get("history_available"):
         model_note = (
             f"{model_note}; RAG linked {rag.get('cases_with_history_links', 0)}/"
@@ -183,7 +204,7 @@ def persist(state: TestGenState, repo: SupabaseRepo) -> dict[str, Any]:
     )
 
     return {
-        "validated_cases": validated,
+        "validated_cases": validated_for_state,
         "duplicates": dups,
         "current_step": "persist",
     }

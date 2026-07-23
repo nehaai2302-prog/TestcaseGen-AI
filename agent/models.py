@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -19,11 +21,28 @@ class AtomicRule(BaseModel):
     # May hold: a UI screen ("Checkout"), a service/endpoint ("OrderService",
     # "POST /api/payments"), a functional area ("AuthN", "Audit"), or "General".
     screen: str | None = None
+    constraints: list[dict[str, Any]] = Field(default_factory=list)
+    # How manual testers must exercise this rule: config forms, comparisons, schedules, or general.
+    execution_profile: str = "general"
+
+
+class RequirementContradiction(BaseModel):
+    rule_id: str
+    issue: str
+    related_rule_ids: list[str] = Field(default_factory=list)
+
+
+class ClarifyingQuestion(BaseModel):
+    rule_ids: list[str] = Field(default_factory=list)
+    question: str
+    why_it_matters: str = ""
 
 
 class AnalystResult(BaseModel):
     reasoning: str = ""
     atomic_rules: list[AtomicRule] = Field(default_factory=list)
+    contradictions: list[RequirementContradiction] = Field(default_factory=list)
+    clarifying_questions: list[ClarifyingQuestion] = Field(default_factory=list)
 
 
 class TestCaseGen(BaseModel):
@@ -43,3 +62,13 @@ class TestCaseGen(BaseModel):
 
 class TestCasesBatch(BaseModel):
     test_cases: list[TestCaseGen] = Field(default_factory=list)
+
+
+class OracleCaseVerdict(BaseModel):
+    case_title: str
+    executable: bool = True
+    issues: list[str] = Field(default_factory=list)
+
+
+class OracleVerdictBatch(BaseModel):
+    verdicts: list[OracleCaseVerdict] = Field(default_factory=list)

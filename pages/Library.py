@@ -9,15 +9,18 @@ from services.export import test_cases_to_dataframe, to_csv_bytes, to_excel_byte
 from services.library_search import library_test_case_rows
 from services.openai_errors import friendly_openai_error, remember_openai_probe_failure
 from services.project_ui import MODULE_NONE_SENTINEL, active_project_name
+from services.supabase_auth import require_auth
 from theme import (
     apply_theme,
     render_active_project_banner,
     render_back_to_home_link,
     render_library_case_detail,
+    render_library_requirement_preview,
     scroll_to_anchor,
 )
 
 apply_theme()
+require_auth()
 render_back_to_home_link()
 
 st.title("📚 Test case library")
@@ -39,6 +42,18 @@ render_active_project_banner(active_project_name(projects, pid))
 if "lib_selected_case_id" not in st.session_state:
     st.session_state.lib_selected_case_id = None
 if "lib_prev_selected_case_id" not in st.session_state:
+    st.session_state.lib_prev_selected_case_id = None
+
+_REQ_ALL = "(all requirements)"
+_REQ_UNLINKED = "(no linked requirement)"
+
+# Apply filter reset before any widget with key="library_req_filter" is created.
+if st.session_state.pop("lib_clear_filters_pending", False):
+    st.query_params.clear()
+    st.session_state.pop("library_linked_requirement", None)
+    st.session_state.pop("library_module_filter", None)
+    st.session_state["library_req_filter"] = _REQ_ALL
+    st.session_state.lib_selected_case_id = None
     st.session_state.lib_prev_selected_case_id = None
 
 _unlinked_qp = st.query_params.get("unlinked")
@@ -80,29 +95,75 @@ with c3:
 with c4:
     sfilter = st.selectbox("Source", ["(any)", "generated", "imported"])
 
-req_filter = st.text_input(
-    "Requirement ID",
-    value="" if _filter_unlinked_only else _default_req,
-    placeholder="e.g. FR-2.2 — leave empty for all",
-    disabled=_filter_unlinked_only,
+_req_summaries = repo.list_requirement_summaries_for_project(str(pid))
+_req_ids = [str(s["requirement_id"]) for s in _req_summaries]
+_req_options = [_REQ_ALL, _REQ_UNLINKED, *_req_ids]
+
+# Deep-link / session default → selectbox (must run before the widget exists).
+if _filter_unlinked_only:
+    _req_default = _REQ_UNLINKED
+elif _default_req and _default_req in _req_ids:
+    _req_default = _default_req
+elif _default_req and _default_req not in _req_ids:
+    _req_default = _REQ_ALL
+else:
+    _req_default = _REQ_ALL
+
+if "library_req_filter" not in st.session_state:
+    st.session_state["library_req_filter"] = _req_default
+elif _filter_unlinked_only:
+    st.session_state["library_req_filter"] = _REQ_UNLINKED
+elif _req_qp and _req_qp in _req_options:
+    st.session_state["library_req_filter"] = _req_qp
+
+_preview_by_id = {str(s["requirement_id"]): s.get("preview") or "" for s in _req_summaries}
+
+
+def _format_req_option(value: str) -> str:
+    if value in (_REQ_ALL, _REQ_UNLINKED):
+        return value
+    preview = _preview_by_id.get(value) or ""
+    return f"{value} — {preview}" if preview else value
+
+
+req_choice = st.selectbox(
+    "Requirement (this project)",
+    options=_req_options,
+    format_func=_format_req_option,
+    key="library_req_filter",
+    help=(
+        "Filter test cases by a requirement stored for the active project. "
+        "Requirements are listed A–Z by ID."
+    ),
 )
 
-_has_deep_link = _filter_unlinked_only or _default_req or _module_filter_sentinel
+_filter_unlinked_only = req_choice == _REQ_UNLINKED
+req_filter = "" if req_choice in (_REQ_ALL, _REQ_UNLINKED) else req_choice
+
+_has_deep_link = (
+    _filter_unlinked_only
+    or bool(req_filter)
+    or bool(_module_filter_sentinel)
+    or (_default_req and _default_req not in _req_ids)
+)
 if _filter_unlinked_only:
     st.caption("Showing test cases with **no** linked requirement (imported / unmapped).")
+elif req_filter:
+    st.caption(f"Showing test cases linked to **{req_filter}**.")
+elif _default_req and _default_req not in _req_ids:
+    st.caption(
+        f"Requirement **{_default_req}** is not in the current project SRS store "
+        "(filter cleared to all). Re-prepare the document if you still need that ID."
+    )
 if _module_filter_sentinel == MODULE_NONE_SENTINEL:
     st.caption("Showing test cases with **no module** set.")
 elif _module_filter_sentinel:
     st.caption(f"Showing test cases in module **{_module_filter_sentinel}**.")
 if _has_deep_link:
     if st.button("Clear filters", key="lib_clear_filters"):
-        st.query_params.clear()
-        st.session_state.pop("library_linked_requirement", None)
-        st.session_state.pop("library_module_filter", None)
-        st.session_state.lib_selected_case_id = None
-        st.session_state.lib_prev_selected_case_id = None
+        # Defer session_state widget key updates until the next run (before widget).
+        st.session_state["lib_clear_filters_pending"] = True
         st.rerun()
-
 try:
     if q.strip():
         with st.spinner("Searching test cases…"):
@@ -255,6 +316,10 @@ if rows:
             st.divider()
             st.subheader("Test case detail")
             render_library_case_detail(case)
+            linked_rid = (case.get("linked_requirement") or "").strip()
+            if linked_rid:
+                req_chunks = repo.get_requirement_chunks_by_id(str(pid), linked_rid)
+                render_library_requirement_preview(linked_rid, req_chunks)
             scroll_to_anchor("lib-test-case-detail")
         else:
             st.session_state.lib_selected_case_id = None

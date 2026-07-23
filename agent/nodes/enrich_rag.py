@@ -56,14 +56,39 @@ def _attach_link(case: dict[str, Any], kind: str, hid: str, sim: float) -> dict[
     return c
 
 
+_RETRIEVAL_STAT_KEYS = (
+    "use_project_history",
+    "skip_reason",
+    "retrieved_bugs",
+    "retrieved_tcs",
+    "used_bugs",
+    "used_tcs",
+    "dropped_bugs",
+    "dropped_tcs",
+)
+
+
+def _merge_rag_stats(
+    prior: dict[str, Any] | None,
+    link_stats: dict[str, Any],
+) -> dict[str, Any]:
+    """Keep retrieve_* counters from retrieval; add/overwrite link-quality fields."""
+    merged = dict(link_stats)
+    for key in _RETRIEVAL_STAT_KEYS:
+        if prior and key in prior:
+            merged[key] = prior[key]
+    return merged
+
+
 def enrich_rag_links(state: TestGenState) -> dict[str, Any]:
     cases = list(state.get("generated_cases") or [])
     bugs = list(state.get("retrieved_bugs") or [])
     tcs = list(state.get("retrieved_tcs") or [])
     rules = list(state.get("atomic_rules") or [])
+    prior_stats = dict(state.get("rag_stats") or {})
 
     if not cases or (not bugs and not tcs):
-        stats = compute_rag_stats(cases, bugs, tcs)
+        stats = _merge_rag_stats(prior_stats, compute_rag_stats(cases, bugs, tcs))
         return {
             "generated_cases": cases,
             "rag_stats": stats,
@@ -76,7 +101,7 @@ def enrich_rag_links(state: TestGenState) -> dict[str, Any]:
         if not (c.get("supporting_bug_ids") or c.get("supporting_test_case_ids"))
     ]
     if not unlinked_idx:
-        stats = compute_rag_stats(cases, bugs, tcs)
+        stats = _merge_rag_stats(prior_stats, compute_rag_stats(cases, bugs, tcs))
         return {
             "generated_cases": cases,
             "rag_stats": stats,
@@ -163,7 +188,7 @@ def enrich_rag_links(state: TestGenState) -> dict[str, Any]:
             for idx, p in zip(no_rule_idx, patched):
                 enriched[idx] = p
 
-    stats = compute_rag_stats(enriched, bugs, tcs)
+    stats = _merge_rag_stats(prior_stats, compute_rag_stats(enriched, bugs, tcs))
     return {
         "generated_cases": enriched,
         "positive_cases": [c for c in enriched if c.get("test_type") == "positive"],

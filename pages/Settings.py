@@ -6,11 +6,13 @@ import streamlit as st
 
 from services.bootstrap import get_repo
 from services.session_project import clear_active_project, set_active_project
+from services.supabase_auth import require_auth
 from services.supabase_repo import DuplicateProjectNameError
 from services.openai_errors import KEY_INVALID_MSG, KEY_MISSING_MSG, resolve_openai_banner_message
 from theme import apply_theme, render_back_to_home_link
 
 apply_theme()
+require_auth()
 render_back_to_home_link()
 st.title("⚙️ Settings")
 st.caption("Create a workspace here, then return to Home for your next steps.")
@@ -51,7 +53,7 @@ with st.form("new_project"):
                         st.success("Project created. Active project unchanged.")
                     else:
                         st.success("Project created successfully.")
-                st.page_link("Home.py", label="Continue on Home →", icon="🏠")
+                st.page_link("pages/Home.py", label="Continue on Home →", icon="🏠")
 
 projects = repo.list_projects()
 if projects:

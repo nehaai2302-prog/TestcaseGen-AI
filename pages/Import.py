@@ -24,9 +24,11 @@ from services.ingest import (
     parse_bugs_csv,
     parse_test_cases_csv,
 )
+from services.supabase_auth import require_auth
 from theme import apply_theme, render_back_to_home_link
 
 apply_theme()
+require_auth()
 
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "sample_data" / "templates"
 

@@ -21,6 +21,11 @@ from agent.prompts import (
     RAG_INSTRUCTION_EMPTY,
     RAG_INSTRUCTION_REQUIRED,
 )
+from services.constraint_index import (
+    build_project_constraint_index,
+    constraints_for_rule,
+    format_constraints_for_prompt,
+)
 
 
 def _batch_spec_lines(
@@ -163,6 +168,8 @@ def _rule_block(
     quotas: dict[str, int],
     bugs_by_id: dict[str, dict[str, Any]],
     tcs_by_id: dict[str, dict[str, Any]],
+    project_index: dict[str, list[dict[str, Any]]] | None = None,
+    regen_feedback: dict[str, list[str]] | None = None,
 ) -> str:
     rid = rule.get("rule_id", "")
     scope = (rule.get("screen") or "General").strip()
@@ -182,6 +189,16 @@ def _rule_block(
         f"Allowed source_requirement_chunk_ids: {chunk_ids}",
         f"Quotas: {', '.join(quota_parts) if quota_parts else '(none)'}",
     ]
+    if project_index is not None:
+        constraint_block = format_constraints_for_prompt(
+            constraints_for_rule(rule, project_index=project_index)
+        )
+        if constraint_block:
+            lines.append(constraint_block)
+    feedback = (regen_feedback or {}).get(str(rid), [])
+    if feedback:
+        lines.append("Prior attempt feedback (do not repeat these mistakes):")
+        lines.extend(f"- {note}" for note in feedback[:5])
     lines.extend(_rule_history_lines(rule, bugs_by_id, tcs_by_id))
     return "\n".join(lines)
 
@@ -208,9 +225,19 @@ def generate_combined_batch(
     tcs_by_id = {
         str(t.get("id")): t for t in (state.get("retrieved_tcs") or [])
     }
+    all_rules = list(state.get("atomic_rules") or rules)
+    project_index = build_project_constraint_index(all_rules)
+    regen_feedback = dict(state.get("regen_feedback") or {})
 
     rule_blocks = "\n\n".join(
-        _rule_block(r, rule_quotas[r["rule_id"]], bugs_by_id, tcs_by_id)
+        _rule_block(
+            r,
+            rule_quotas[r["rule_id"]],
+            bugs_by_id,
+            tcs_by_id,
+            project_index,
+            regen_feedback,
+        )
         for r in batch_rules
     )
 

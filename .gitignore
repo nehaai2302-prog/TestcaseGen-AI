@@ -13,3 +13,7 @@ __pycache__/
 
 # Scratch files
 _scratch_verify.py
+
+AGENTS.md
+PLAN.md
+.vscode/settings.json

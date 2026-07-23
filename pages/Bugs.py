@@ -6,6 +6,7 @@ import streamlit as st
 
 from services.bootstrap import get_repo
 from services.project_ui import active_project_name
+from services.supabase_auth import require_auth
 from theme import (
     apply_theme,
     render_active_project_banner,
@@ -15,6 +16,7 @@ from theme import (
 )
 
 apply_theme()
+require_auth()
 render_back_to_home_link()
 
 st.title("🐛 Bug reports")

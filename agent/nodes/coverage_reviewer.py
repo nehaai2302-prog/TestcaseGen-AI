@@ -7,6 +7,7 @@ from typing import Any
 
 from agent.coverage import build_coverage_report, compute_gaps
 from agent.exhaustiveness import normalize_level
+from agent.ambiguity import STATUS_REQUIRES_CLARIFICATION
 from agent.state import TestGenState
 
 
@@ -22,20 +23,30 @@ def review_coverage(state: TestGenState) -> dict[str, Any]:
 
     gaps = compute_gaps(rules, cases, level)
     report = build_coverage_report(rules, cases, level)
+    blocked = int(report.get("blocked_rule_count") or 0)
 
     reasoning_parts = [
         state.get("reasoning") or "",
         f"Coverage review (round {review_round}): "
-        f"{report['rules_fully_covered']}/{report['rule_count']} requirements fully covered, "
-        f"{report['total_cases']} cases, {report['gap_count']} gaps.",
+        f"{report['rules_fully_covered']}/{report['rule_count']} fully covered, "
+        f"{report.get('rules_partially_covered', 0)} partially covered, "
+        f"{report.get('rules_not_covered', 0)} not covered "
+        f"({report.get('generatable_rule_count', report['rule_count'])} generatable, "
+        f"{blocked} blocked), "
+        f"{report['total_cases']} cases.",
     ]
+    if blocked:
+        reasoning_parts.append(
+            f"{blocked} requirement(s) blocked with status '{STATUS_REQUIRES_CLARIFICATION}' "
+            "due to specification contradictions."
+        )
     if gaps:
         sample = ", ".join(
             f"{g['rule_id']}/{g['test_type']} need {g['needed']}" for g in gaps[:8]
         )
         if len(gaps) > 8:
             sample += f" … (+{len(gaps) - 8} more)"
-        reasoning_parts.append(f"Gaps: {sample}.")
+        reasoning_parts.append(f"Incomplete quotas: {sample}.")
 
     needs_regen = bool(gaps) and review_round < _max_review_rounds()
 
@@ -51,8 +62,19 @@ def review_coverage(state: TestGenState) -> dict[str, Any]:
 
 def prepare_regeneration(state: TestGenState) -> dict[str, Any]:
     """Increment review round before looping back to generators."""
+    from agent.regen import build_regen_feedback
+
+    feedback = build_regen_feedback(state)
+    gap_rules = {
+        str(g.get("rule_id") or "")
+        for g in (state.get("coverage_gaps") or [])
+        if g.get("rule_id")
+    }
+    if gap_rules:
+        feedback = {k: v for k, v in feedback.items() if k in gap_rules}
     return {
         "review_round": int(state.get("review_round") or 0) + 1,
         "agent_looped_back": True,
+        "regen_feedback": feedback,
         "current_step": "prepare_regeneration",
     }

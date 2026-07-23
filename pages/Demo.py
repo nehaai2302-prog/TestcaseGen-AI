@@ -5,19 +5,21 @@ from __future__ import annotations
 import streamlit as st
 
 from services.bootstrap import get_repo
+from services.supabase_auth import require_auth
 from theme import apply_theme, render_back_to_home_link, render_demo_chapters
 
 # (display time, seconds, chapter title) — jumps use #t= on the signed MP4 URL
 _WALKTHROUGH_CHAPTERS: tuple[tuple[str, int, str], ...] = (
-    ("0:45", 45, "Project setup"),
-    ("1:55", 115, "Import"),
-    ("3:43", 223, "Generate"),
-    ("7:25", 445, "Traceability"),
-    ("8:00", 480, "Export"),
+    ("1:05", 65, "Project setup"),
+    ("1:53", 113, "Import"),
+    ("3:20", 200, "Generate"),
+    ("6:34", 394, "Traceability matrix"),
+    ("7:17", 437, "Export"),
 )
 
 
 apply_theme()
+require_auth()
 render_back_to_home_link()
 
 st.title("🎬 Workflow Demo")
@@ -34,10 +36,21 @@ except Exception as e:
 
 demo_video_url = repo.get_demo_video_url()
 if not demo_video_url:
-    st.info(
-        "Demo video is not configured. Set `DEMO_VIDEO_BUCKET` and "
-        "`DEMO_VIDEO_PATH` in your environment (see `.env.example`)."
-    )
+    import os
+
+    bucket = (os.getenv("DEMO_VIDEO_BUCKET") or "").strip()
+    path = (os.getenv("DEMO_VIDEO_PATH") or "").strip()
+    if not bucket or not path:
+        st.info(
+            "Demo video is not configured. Set `DEMO_VIDEO_BUCKET` and "
+            "`DEMO_VIDEO_PATH` in your environment (see `.env.example`)."
+        )
+    else:
+        st.warning(
+            f"Could not create a signed URL for `{bucket}/{path}`. "
+            "Check that the file exists in that private Storage bucket, "
+            "then **restart** the Streamlit app so `.env` changes reload."
+        )
     st.stop()
 
 st.link_button(

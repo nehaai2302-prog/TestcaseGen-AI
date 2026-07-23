@@ -1,4 +1,4 @@
-"""Supabase / Postgres data access for QAWeave AI."""
+"""Supabase / Postgres data access for QAWeaver AI."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ def _filter_rows_by_module(
     return [r for r in rows if (r.get("module") or "").strip() == module_filter]
 
 
-def _get_client() -> Client:
+def _get_service_client() -> Client:
     url = os.environ.get("SUPABASE_URL")
     key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
     if not url or not key:
@@ -37,26 +37,40 @@ def _get_client() -> Client:
 class SupabaseRepo:
     """Thin repository around supabase-py table and RPC calls."""
 
-    def __init__(self, client: Client | None = None) -> None:
-        self._client = client or _get_client()
+    def __init__(self, client: Client | None = None, user_id: str | None = None) -> None:
+        self._client = client or _get_service_client()
+        self._user_id = user_id
+
+    @property
+    def user_id(self) -> str | None:
+        return self._user_id
 
     @property
     def client(self) -> Client:
         return self._client
 
     def get_demo_video_url(self) -> str | None:
-        return get_demo_video_url(self._client)
+        # Private Storage signed URLs require the service role — never the user JWT.
+        return get_demo_video_url()
 
     # --- Projects ---
 
     def create_project(self, name: str, description: str | None = None) -> dict[str, Any]:
-        row = {"name": name, "description": description or ""}
+        if not self._user_id:
+            raise RuntimeError("Cannot create a project without a signed-in user.")
+        row = {
+            "name": name,
+            "description": description or "",
+            "user_id": self._user_id,
+        }
         try:
             res = self._client.table("projects").insert(row).execute()
             return res.data[0]
         except Exception as e:
             msg = str(e).lower()
-            if "duplicate key" in msg and "ux_projects_name_norm" in msg:
+            if "duplicate key" in msg and (
+                "ux_projects_user_name_norm" in msg or "ux_projects_name_norm" in msg
+            ):
                 raise DuplicateProjectNameError(
                     "A project with this name already exists."
                 ) from e
@@ -65,7 +79,7 @@ class SupabaseRepo:
     def list_projects(self) -> list[dict[str, Any]]:
         res = (
             self._client.table("projects")
-            .select("id,name,description,created_at")
+            .select("id,name,description,created_at,user_id")
             .order("created_at", desc=True)
             .execute()
         )
@@ -99,11 +113,66 @@ class SupabaseRepo:
         res = (
             self._client.table("requirements")
             .select(
-                "id,project_id,document_name,chunk_index,chunk_text,"
+                "id,project_id,document_name,chunk_index,chunk_text,content_hash,"
                 "requirement_id,is_synthetic_requirement,module,created_at"
             )
             .eq("project_id", project_id)
             .eq("document_name", document_name)
+            .order("chunk_index")
+            .execute()
+        )
+        return res.data or []
+
+    def list_requirement_summaries_for_project(
+        self, project_id: str
+    ) -> list[dict[str, Any]]:
+        """Distinct requirement IDs for a project, sorted by requirement_id.
+
+        Each summary includes document_name, module, and a short text preview from
+        the first chunk for that ID.
+        """
+        res = (
+            self._client.table("requirements")
+            .select(
+                "id,requirement_id,document_name,chunk_text,chunk_index,module"
+            )
+            .eq("project_id", project_id)
+            .order("requirement_id")
+            .order("chunk_index")
+            .execute()
+        )
+        rows = res.data or []
+        by_id: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            rid = (row.get("requirement_id") or "").strip()
+            if not rid or rid in by_id:
+                continue
+            text = " ".join(str(row.get("chunk_text") or "").split())
+            preview = text if len(text) <= 120 else text[:120] + "…"
+            by_id[rid] = {
+                "requirement_id": rid,
+                "document_name": row.get("document_name") or "",
+                "module": row.get("module") or "",
+                "preview": preview,
+                "chunk_id": row.get("id"),
+            }
+        return sorted(by_id.values(), key=lambda r: str(r["requirement_id"]))
+
+    def get_requirement_chunks_by_id(
+        self, project_id: str, requirement_id: str
+    ) -> list[dict[str, Any]]:
+        """All chunks for a requirement ID in this project (ordered by chunk_index)."""
+        rid = (requirement_id or "").strip()
+        if not rid:
+            return []
+        res = (
+            self._client.table("requirements")
+            .select(
+                "id,requirement_id,document_name,chunk_index,chunk_text,module,"
+                "is_synthetic_requirement"
+            )
+            .eq("project_id", project_id)
+            .eq("requirement_id", rid)
             .order("chunk_index")
             .execute()
         )
@@ -222,6 +291,32 @@ class SupabaseRepo:
         )
         return res.count or 0
 
+    def delete_generated_test_cases_for_requirements(
+        self,
+        project_id: str,
+        requirement_ids: list[str],
+    ) -> int:
+        """Delete generated (not imported) cases linked to the given requirement IDs.
+
+        Returns the number of rows deleted when the API provides a count; otherwise
+        returns the number of IDs requested (best-effort).
+        """
+        ids = sorted({str(r).strip() for r in requirement_ids if str(r).strip()})
+        if not ids:
+            return 0
+        res = (
+            self._client.table("test_cases")
+            .delete()
+            .eq("project_id", project_id)
+            .eq("source", "generated")
+            .in_("linked_requirement", ids)
+            .execute()
+        )
+        data = res.data
+        if isinstance(data, list):
+            return len(data)
+        return len(ids)
+
     def get_test_case_traceability(
         self,
         project_id: str,
@@ -239,12 +334,15 @@ class SupabaseRepo:
         rows = _filter_rows_by_module(all_rows, module_filter)
         generated = 0
         imported = 0
-        by_req: dict[str, int] = {}
+        by_req: dict[str, dict[str, int]] = {}
         unlinked = 0
+        unlinked_generated = 0
+        unlinked_imported = 0
 
         for row in rows:
             src = (row.get("source") or "").strip().lower()
-            if src == "imported":
+            is_imported = src == "imported"
+            if is_imported:
                 imported += 1
             else:
                 generated += 1
@@ -252,12 +350,28 @@ class SupabaseRepo:
             req = (row.get("linked_requirement") or "").strip()
             if not req:
                 unlinked += 1
+                if is_imported:
+                    unlinked_imported += 1
+                else:
+                    unlinked_generated += 1
                 continue
-            by_req[req] = by_req.get(req, 0) + 1
+            bucket = by_req.setdefault(
+                req, {"generated": 0, "imported": 0, "test_case_count": 0}
+            )
+            if is_imported:
+                bucket["imported"] += 1
+            else:
+                bucket["generated"] += 1
+            bucket["test_case_count"] += 1
 
         by_requirement = [
-            {"linked_requirement": rid, "test_case_count": count}
-            for rid, count in sorted(by_req.items(), key=lambda x: x[0].lower())
+            {
+                "linked_requirement": rid,
+                "test_case_count": counts["test_case_count"],
+                "generated": counts["generated"],
+                "imported": counts["imported"],
+            }
+            for rid, counts in sorted(by_req.items(), key=lambda x: x[0].lower())
         ]
         return {
             "total": len(rows),
@@ -265,6 +379,8 @@ class SupabaseRepo:
             "generated": generated,
             "imported": imported,
             "unlinked": unlinked,
+            "unlinked_generated": unlinked_generated,
+            "unlinked_imported": unlinked_imported,
             "distinct_requirements": len(by_req),
             "by_requirement": by_requirement,
         }
@@ -306,14 +422,20 @@ class SupabaseRepo:
 
 
 def get_demo_video_url(client: Client | None = None) -> str | None:
-    """Signed URL for a demo video in private Supabase Storage (regenerated each call)."""
+    """Signed URL for a demo video in private Supabase Storage (regenerated each call).
+
+    Signs with the service-role client by default. User/anon JWTs cannot read a
+    private demo bucket (auth made this fail silently and hide the Home link).
+    """
     bucket = os.getenv("DEMO_VIDEO_BUCKET", "").strip()
     path = os.getenv("DEMO_VIDEO_PATH", "").strip().lstrip("/")
     if not bucket or not path:
         return None
     ttl = int(os.getenv("DEMO_VIDEO_SIGNED_URL_TTL", "86400"))
     try:
-        res = (client or _get_client()).storage.from_(bucket).create_signed_url(path, ttl)
+        res = (client or _get_service_client()).storage.from_(bucket).create_signed_url(
+            path, ttl
+        )
     except Exception:
         return None
     if isinstance(res, dict):

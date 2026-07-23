@@ -1,5 +1,7 @@
 # Verification notes (gold-style checklist)
 
+For the full Phase 5 multi-track checklist (auth, EcoCharge, regen, second spec), see [`docs/E2E_VERIFICATION.md`](E2E_VERIFICATION.md).
+
 Use `sample_data/sample_requirements.txt` with imported `sample_bug_reports.csv` and `sample_test_cases.csv`.
 
 ## Exhaustiveness levels
